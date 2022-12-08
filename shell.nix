@@ -1,0 +1,15 @@
+{ pkgs ? import <nixpkgs> {} }:
+pkgs.mkShell {
+  buildInputs = [
+    pkgs.inotify-tools
+    pkgs.elmPackages.elm
+    pkgs.elmPackages.elm-format
+    pkgs.elmPackages.elm-test
+    pkgs.elmPackages.elm-review
+    pkgs.elmPackages.elm-language-server
+    pkgs.esbuild
+  ];
+  shellHook = ''
+    export LANG=en_US.UTF-8
+  '';
+}

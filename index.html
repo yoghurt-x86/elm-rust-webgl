@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <title>hello-wasm example</title>
+    <link rel="stylesheet" href="https://unpkg.com/tachyons@4.12.0/css/tachyons.min.css"/>
+
+    <link rel="modulepreload" href="/pkg/hello_wasm.js">
+    <link rel="modulepreload" href="/assets/js/rustcanvas.js">
+    <link rel="modulepreload" href="/pkg/hello_wasm_bg.wasm">
+    <script src="/assets/js/elm.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet"> 
+  </head>
+  <body style="background:black;margin:0;overflow:hidden;font-family:'vt323';">
+    <div id="elm"></div>
+    <script type="module">
+        import { RustCanvas } from "/assets/js/rustcanvas.js";
+
+        customElements.define("rust-canvas", RustCanvas);
+
+        function getMediaQueries() {
+            return { ns : window.matchMedia("screen and (min-width: 30em)").matches, m : window.matchMedia("screen and (min-width: 30em) and (max-width: 60em)").matches, l : window.matchMedia("screen and (min-width: 60em)").matches }
+        }
+
+        const flags = { host: window.location.origin, tachyonsMedia : getMediaQueries()};
+        const app = Elm.Main.init({ node: document.getElementById('elm'), flags: flags });
+
+        window.addEventListener('resize', () => { 
+            let media = getMediaQueries();
+            app.ports.getMedia.send(media);
+        });
+
+        app.ports.rustEvent.subscribe(function(e) {
+            e.rust_canvas.handle_msg(e)
+        });
+    </script>
+    <!--<canvas is="rust-canvas" id="canvas"></canvas>-->
+  </body>
+</html>
+
