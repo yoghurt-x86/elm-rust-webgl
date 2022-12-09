@@ -2,6 +2,8 @@ use wasm_bindgen::prelude::*;
 use web_sys::*;
 use wasm_bindgen::JsCast;
 use web_sys::WebGlRenderingContext as GL;
+use common_funcs as cf;
+use serde::{Serialize, Deserialize};
 
 #[macro_use]
 extern crate lazy_static;
@@ -11,6 +13,14 @@ mod programs;
 mod common_funcs;
 mod shaders;
 
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum Msg {
+    Focus,
+    Unfocus,
+    ChangeFOV { angle: f32}
+}
 
 #[wasm_bindgen]
 pub struct Client {
@@ -50,10 +60,6 @@ impl Movement {
 impl Client {
     #[wasm_bindgen(constructor)]
     pub fn new(element: Element) -> Self {
-
-        
-
-
         let canvas: web_sys::HtmlCanvasElement = element.dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
         let gl: WebGlRenderingContext = canvas.get_context("webgl").unwrap().unwrap().dyn_into().unwrap();
 
@@ -89,19 +95,18 @@ impl Client {
             keys
         };
 
-        for msg in messages.iter() {
-           match msg.as_string().unwrap().as_str() {
-               "focus" => self.canvas.request_pointer_lock(),
-               "unfocus" => window().unwrap().document().unwrap().exit_pointer_lock(),
-               x => panic!("message type not handled: {}", x),
 
-           }
-            
+        let mut new_angle = None;
+        for msg in messages.iter() {
+            let m : Msg = serde_wasm_bindgen::from_value(msg).unwrap();
+            match m {
+                Msg::Focus => self.canvas.request_pointer_lock(),
+                Msg::Unfocus => window().unwrap().document().unwrap().exit_pointer_lock(),
+                Msg::ChangeFOV { angle } => new_angle = Some(angle),
+            }
         }
 
-        let out = app_state::update_dynamic_data(time, height, width, &s, viewport_active, mouse_movement);
-
-
+        let out = app_state::update_dynamic_data(time, height, width, &s, viewport_active, mouse_movement, new_angle);
         
         Ok(out)
     }

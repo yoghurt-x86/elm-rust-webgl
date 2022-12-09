@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <title>hello-wasm example</title>
-    <link rel="stylesheet" href="https://unpkg.com/tachyons@4.12.0/css/tachyons.min.css"/>
+    <link href="https://unpkg.com/bonsai.css@latest/dist/bonsai.min.css" rel="stylesheet">
 
     <link rel="modulepreload" href="/pkg/hello_wasm.js">
     <link rel="modulepreload" href="/assets/js/rustcanvas.js">
@@ -13,6 +13,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet"> 
+<style>
+:root {
+  --primary: #d27070;
+  --secondary: #95b487;
+  --text-main: #999999;;
+  --border-radius: 3px;
+}
+</style>
   </head>
   <body style="background:black;margin:0;overflow:hidden;font-family:'vt323';">
     <div id="elm"></div>
@@ -37,7 +45,6 @@
             e.rust_canvas.handle_msg(e)
         });
     </script>
-    <!--<canvas is="rust-canvas" id="canvas"></canvas>-->
   </body>
 </html>
 

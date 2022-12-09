@@ -1,7 +1,7 @@
 module Main exposing (Msg(..), init, main, subscriptions, update, view)
 
 import Browser
-import RustCanvas
+import RustCanvas exposing (Msg(..))
 import Color
 import Date
 import Dict exposing (Dict)
@@ -29,9 +29,25 @@ import Key
 main =
     Browser.element
         { init = init
-        , update = update
-        , subscriptions = subscriptions
-        , view = view
+        , update = 
+            \ msg model ->
+                case model of 
+                    Ok m ->
+                        update msg m
+                            |> Tuple.mapFirst Ok 
+
+                    Err _ ->
+                        (model, Cmd.none)
+        , subscriptions = 
+            \ m ->
+                case m of 
+                    Ok model -> subscriptions model
+                    Err _ -> Sub.none 
+        , view = 
+            \ m ->
+                case m of 
+                    Ok model -> view model
+                    Err e -> text (D.errorToString e)
         }
 
 
@@ -39,8 +55,9 @@ type alias Model =
     { host : String
     , tachyonsMedia : TachyonsMedia
     , flashMsg : Maybe String
-    , rust_ref : E.Value
+    , rust_ref : RustCanvas.RustState
     , focused : Bool
+    , input_fov : Float
     }
 
 
@@ -49,12 +66,13 @@ flagsDecoder =
         |> D.required "host" D.string
         |> D.required "tachyonsMedia" Tachyons.decoder
         |> D.hardcoded Nothing
-        |> D.hardcoded (E.string "uninitialized")
+        |> D.hardcoded RustCanvas.uninitialized 
         |> D.hardcoded False
+        |> D.hardcoded 90.0
 
 
 
-init : E.Value -> ( Model, Cmd Msg )
+init : E.Value -> ( Result D.Error Model, Cmd Msg )
 init value =
     let
         week =
@@ -62,27 +80,12 @@ init value =
     in
     case week of
         Ok res ->
-            ( res
+            ( Ok res
             , Cmd.none
             )
 
         Err e ->
-            let
-                _ =
-                    Debug.log "e" e
-            in
-            ( { host = "unknown" 
-              , tachyonsMedia =
-                    { ns = False
-                    , m = False
-                    , l = False
-                    }
-              , flashMsg = Nothing
-              , rust_ref = E.string "unknown"
-              , focused = False
-              }
-            , Cmd.none
-            )
+            (Err e, Cmd.none) 
 
 
 -- UPDATE
@@ -91,9 +94,10 @@ init value =
 type Msg
     = GotTachyonsMedia TachyonsMedia
     | SetFlash (Maybe String)
-    | GotRustRef (E.Value)
+    | GotRustRef (RustCanvas.RustState)
     | KeyDown Key.Key 
     | KeyUp Key.Key 
+    | InputFov Float
 
 
 
@@ -118,15 +122,10 @@ update msg model =
         KeyDown key ->
             case key of
                 Key.Character 'z' ->
-                    let rmsg = if model.focused then "unfocus" else "focus"
+                    let rmsg = if model.focused then Unfocus else Focus
                     in
                     ( { model | focused = not model.focused }
-                    , RustCanvas.rustEvent  <|
-                        E.object 
-                            [ ("msg", E.string rmsg) 
-                            , ("rust_canvas", (model.rust_ref))
-                            ]
-                    )
+                    , RustCanvas.sendRustMsg model.rust_ref rmsg                    )
 
                 other -> 
                     let _ = Debug.log "key" other
@@ -138,6 +137,12 @@ update msg model =
         KeyUp key ->
             ( model
             , Cmd.none
+            )
+
+        InputFov float ->
+            ( { model | input_fov = float }
+            , RustCanvas.sendRustMsg model.rust_ref <|
+                ChangeFOV float
             )
 
 
@@ -159,19 +164,45 @@ subscriptions model =
 
 view : Model -> Html Msg
 view model =
-    let decoder = 
-            D.decodeValue  <|
-                RustCanvas.stateDecoder <|
-                    D.field "fps" <|
-                        D.float 
+    let time_res = 
+            RustCanvas.decodeValue 
+                model.rust_ref
+                (D.field "fps" <|
+                    D.float 
+                )
         time = 
-            (decoder model.rust_ref )
-            |> Result.withDefault 0
+            Result.withDefault 0 time_res
     in
     section 
-        [ class "relative" ]
-        [ RustCanvas.view
+        [ attribute "style" "--pos:relative" ]  
+        [ div 
+            [ attribute "style" "--inset-top-left:10px; --pos:absolute;"  ] 
+            [ h3 [] [ text (String.fromInt <| Basics.round time)] ]
+        , div 
+            [ attribute "style" "--inset-top-right:10px; --pos:absolute;"  ] 
+            [ label [ for "input-fov"] 
+                [ text <| "Fov: " ++ (String.fromFloat model.input_fov)
+                , input 
+                    [ id "input-fov"
+                    , type_ "range"
+                    , Html.Attributes.min "30"
+                    , Html.Attributes.max "175"
+                    , value (String.fromFloat model.input_fov)
+                    , stopPropagationOn 
+                        "input" 
+                            (D.map (\x -> (x, True))
+                                (targetValue
+                                |> D.andThen ( \ str ->
+                                        case String.toFloat str of
+                                            Just f -> D.succeed (InputFov f)
+                                            Nothing -> D.fail "fail"
+                                    )
+                                )
+                            ) 
+                    ] 
+                    [] 
+                ]
+            ]
+        , RustCanvas.view
             |> Html.map GotRustRef
-        , div [ class "absolute top-0 left-0 f3 o-60 white bg-black-60" ] 
-            [ text (String.fromInt <| Basics.round time)]
         ]

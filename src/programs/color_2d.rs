@@ -112,13 +112,12 @@ impl Color2D {
         let up = na::Vector3::new(0.,0.,1.);
 
         let view = na::geometry::Isometry3::look_at_rh(&camera_point, &target, &up);
-        let perspective : na::geometry::Perspective3<f32> = na::geometry::Perspective3::new(app.canvas_width / app.canvas_height, 90. * std::f32::consts::PI / 180. /*(90deg)*/, 1.0, 100000.0);
+        let perspective : na::geometry::Perspective3<f32> = na::geometry::Perspective3::new(app.canvas_width / app.canvas_height, app.camera.fov * std::f32::consts::PI / 180. /*(90deg)*/, 1.0, 100000.0);
         let camera_transform = perspective.as_matrix() * view.to_homogeneous();
-
         
+
         let transform =  camera_transform * model_transform ; //* translation * scale;
         //let transform_mat = cf::mult_matrix_4(scale_mat, translation_mat);
-
 
 
         gl.uniform_matrix4fv_with_f32_array(Some(&self.u_transform), false, transform.as_slice());

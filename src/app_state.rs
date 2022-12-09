@@ -17,6 +17,7 @@ pub struct Camera {
     pub position: na::Point3<f32>,
     pub direction: na::Vector3<f32>,
     pub euler_angles: na::Vector3<f32>,
+    pub fov: f32,
 }
 
 pub struct AppState {
@@ -51,6 +52,7 @@ impl Camera {
             position: na::Point3::new(128., 128., 64.),
             direction: what,
             euler_angles: angles,
+            fov: 90.0,
         }
     }
 }
@@ -70,7 +72,7 @@ impl AppState {
     }
 }
 
-pub fn update_dynamic_data(time: f32, canvas_height: f32, canvas_width: f32, keys: &Vec<String>, viewport_active: bool, mouse_movement: &Movement) -> OutMsg {
+pub fn update_dynamic_data(time: f32, canvas_height: f32, canvas_width: f32, keys: &Vec<String>, viewport_active: bool, mouse_movement: &Movement, angle: Option<f32>) -> OutMsg {
     let min_height_width = canvas_height.min(canvas_width);
     let display_size = 0.9 * min_height_width;
     let half_display_size = display_size / 2.;
@@ -107,9 +109,16 @@ pub fn update_dynamic_data(time: f32, canvas_height: f32, canvas_width: f32, key
                      _ =>  (),
                 }
             }
-            Camera { position: point, direction: dir, euler_angles: angles }
+
+            let fov_angle = angle.unwrap_or(camera.fov);
+
+            Camera { position: point, direction: dir, euler_angles: angles, fov: fov_angle }
         } else {
-            data.camera
+            let fov_angle = angle.unwrap_or(data.camera.fov);
+            Camera {
+                fov: fov_angle,
+                ..data.camera
+            }
         };
 
     let fps = 1000. / (time - data.time);
