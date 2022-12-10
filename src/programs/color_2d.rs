@@ -28,13 +28,13 @@ impl Color2D {
         ).unwrap();
 
         let vertices_rect: [f32; 12] = [
-            0., 64., 0.,// x, y
-            0., 0., 0.,// x, y
+            32., 64., 0.,// x, y
+            32., 32., 0.,// x, y
             64., 64., 0.,// x, y
-            64., 0., 0.,// x, y
+            64., 32., 0.,// x, y
         ];
 
-        let indices_rect: [u16; 6] = [0, 1, 2, 2, 3, 1];
+        let indices_rect: [u16; 6] = [0, 1, 2, 2, 1, 3];
 
         let memory_buffer = wasm_bindgen::memory()
             .dyn_into::<WebAssembly::Memory>()
@@ -100,7 +100,6 @@ impl Color2D {
 
         gl.uniform1f(Some(&self.u_opacity), 1.);
 
-
         let rotate_flat = na::Rotation3::from_euler_angles(0., 0., 32. * std::f32::consts::PI / 180.).to_homogeneous();
         let translate_y = na::Matrix4::new_translation(&na::Vector3::new(0.,0.5,0.));
         let model_transform = translate_y * rotate_flat;
@@ -116,7 +115,7 @@ impl Color2D {
         let camera_transform = perspective.as_matrix() * view.to_homogeneous();
         
 
-        let transform =  camera_transform * model_transform ; //* translation * scale;
+        let transform =  camera_transform * model_transform ; 
         //let transform_mat = cf::mult_matrix_4(scale_mat, translation_mat);
 
 

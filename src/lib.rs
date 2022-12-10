@@ -1,7 +1,14 @@
 use wasm_bindgen::prelude::*;
 use web_sys::*;
+use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
 use wasm_bindgen::JsCast;
+use std::rc::Rc;
+use wasm_bindgen_futures::JsFuture;
 use web_sys::WebGlRenderingContext as GL;
+use web_sys::{Response, Request, RequestMode, RequestInit};
+use web_sys::{Url};
+use futures::executor::block_on;
 use common_funcs as cf;
 use serde::{Serialize, Deserialize};
 
@@ -19,16 +26,16 @@ mod shaders;
 pub enum Msg {
     Focus,
     Unfocus,
-    ChangeFOV { angle: f32}
+    ChangeFOV { angle: f32},
 }
 
 #[wasm_bindgen]
 pub struct Client {
     canvas: web_sys::HtmlCanvasElement,
-    gl: WebGlRenderingContext,
+    gl: Rc<RefCell<WebGlRenderingContext>>,
     program_color_2d: programs::Color2D,
-    //_program_color_2d_gradient: programs::Color2DGradient,
-    //program_graph_3d: programs::Graph3D,
+    program_texture: Rc<RefCell<programs::Texture>>,
+    count: Rc<RefCell<Vec<u32>>>,
 }
 
 #[derive(Debug)]
@@ -56,24 +63,105 @@ impl Movement {
     }
 }
 
+pub async fn load_assets() -> Result<HtmlImageElement, JsValue> {
+    let mut opts = RequestInit::new();
+    opts.method("GET");
+    opts.mode(RequestMode::Cors);
+
+    let url = "https://webglfundamentals.org/webgl/resources/f-texture.png";
+
+    let request = Request::new_with_str_and_init(&url, &opts)?;
+
+    request
+        .headers()
+        .set("Accept", "application/vnd.github.v3+json")?;
+
+    let window = web_sys::window().unwrap();
+    let resp_value = JsFuture::from(window.fetch_with_request(&request)).await?;
+
+    // `resp_value` is a `Response` object.
+    //assert!(resp_value.is_instance_of::<Response>());
+    let resp: Response = resp_value.dyn_into().unwrap();
+
+    // Convert this other `Promise` into a rust `Future`.
+    let val = JsFuture::from(resp.blob()?).await?;
+
+    let blob: Blob = val.dyn_into().unwrap();
+
+    let asd = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
+    let image = HtmlImageElement::new().unwrap();
+    image.set_src(&asd);
+
+    // Send the JSON response back to JS.
+    Ok(image)
+}
+
 #[wasm_bindgen]
 impl Client {
     #[wasm_bindgen(constructor)]
-    pub fn new(element: Element) -> Self {
-        let canvas: web_sys::HtmlCanvasElement = element.dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
-        let gl: WebGlRenderingContext = canvas.get_context("webgl").unwrap().unwrap().dyn_into().unwrap();
+    pub async fn new(element: Element) -> Self {
 
-        gl.enable(GL::BLEND);
-        gl.blend_func(GL::SRC_ALPHA, GL::ONE_MINUS_SRC_ALPHA);
-        gl.clear_color(0.0, 0.0, 0.0, 1.0); //RGBA
-        gl.clear_depth(1.);
+        let canvas: web_sys::HtmlCanvasElement = element.dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
+        let gl_: WebGlRenderingContext = canvas.get_context("webgl").unwrap().unwrap().dyn_into().unwrap();
+        let rgl : Rc<RefCell<WebGlRenderingContext>> = Rc::new(RefCell::new(gl_));
+
+
+        {
+            let gl = rgl.borrow_mut();
+            gl.enable(GL::BLEND);
+            gl.blend_func(GL::SRC_ALPHA, GL::ONE_MINUS_SRC_ALPHA);
+            gl.clear_color(0.0, 0.0, 0.0, 1.0); //RGBA
+            gl.clear_depth(1.);
+        }
+
+        let program_color_2d = programs::Color2D::new(&rgl.borrow());
+        let program_texture = Rc::new(RefCell::new(programs::Texture::new(&rgl.borrow())));
+
+        let texture = Rc::new(RefCell::new(load_assets().await.unwrap()));
+
+        let count2 : Rc<RefCell<Vec<u32>>> = Rc::new(RefCell::new(Vec::new()));
+
+        {
+            let c = count2.clone();
+            let closure = Closure::<dyn FnMut(_)>::new(move |event: web_sys::MouseEvent| {
+                let mut refe = c.borrow_mut();
+                refe.push(1);
+                cf::log("count");
+            });
+            canvas.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref()).unwrap();
+            closure.forget();
+        }
+
+        {
+            let t = texture.clone();
+            let poo = rgl.clone();
+            let program = program_texture.clone();
+            let closure = Closure::<dyn FnMut(_)>::new(move |event: web_sys::MouseEvent| {
+                let gl = poo.borrow_mut();
+                gl.bind_texture(GL::TEXTURE_2D, Some(&program.borrow().texture));
+                gl.tex_image_2d_with_u32_and_u32_and_image(
+                    GL::TEXTURE_2D, //target 
+                    0,
+                    GL::RGBA as i32,  //inernalFormat
+                    GL::RGBA,  
+                    GL::UNSIGNED_BYTE,
+                    &t.borrow(),
+                ).unwrap();
+                gl.generate_mipmap(GL::TEXTURE_2D);
+                cf::log("texture");
+                cf::log(&format!("texture: {:?}", gl));
+                cf::log(&format!("texture: {:?}", t.borrow().height()));
+            });
+            texture.borrow_mut().add_event_listener_with_callback("load", closure.as_ref().unchecked_ref()).unwrap();
+            closure.forget();
+        }
 
         Self {
             canvas: canvas,
-            program_color_2d: programs::Color2D::new(&gl),
-            //_program_color_2d_gradient: programs::Color2DGradient::new(&gl),
-            //program_graph_3d: programs::Graph3D::new(&gl),
-            gl: gl,
+            program_color_2d: program_color_2d,
+            program_texture: program_texture,
+            gl: rgl,
+            count: count2
         }
     }
 
@@ -87,6 +175,9 @@ impl Client {
         viewport_active: bool,
         messages: js_sys::Array,
         ) -> Result<app_state::OutMsg, JsValue> {
+
+        cf::log(&format!("{:?}", self.count.borrow()));
+
         let s : Vec<String> = {
             let mut keys = Vec::new();
             for val in held_keys.values() {
@@ -94,7 +185,6 @@ impl Client {
             }
             keys
         };
-
 
         let mut new_angle = None;
         for msg in messages.iter() {
@@ -112,12 +202,22 @@ impl Client {
     }
 
     pub fn render(&self) {
-        self.gl.clear(GL::COLOR_BUFFER_BIT | GL::DEPTH_BUFFER_BIT);
+
+        let gl = self.gl.borrow_mut();
+
+        gl.enable(GL::CULL_FACE);
+        gl.enable(GL::DEPTH_TEST);
+        gl.clear(GL::COLOR_BUFFER_BIT | GL::DEPTH_BUFFER_BIT);
 
         let curr_state = app_state::get_curr_state();
 
         self.program_color_2d.render(
-             &self.gl,
+             &gl,
+             &curr_state,
+         );
+
+        self.program_texture.borrow_mut().render(
+             &gl,
              &curr_state,
          );
     }

@@ -47,60 +47,65 @@ export class RustCanvas extends HTMLElement{
             alert('Failed to initialize WebGL');
             return;
         }
-        canvas.client = new Client(canvas);
 
-        const FPS_THROTTLE = 1000.0 / 300.0; // milliseconds / frames
-        const JS_THROTTLE = 1000.0 / 10.0; // milliseconds / frames
-        const js_event = new CustomEvent('rust_state', {});
+        const client_promise = (new Client(canvas));
 
-        const initialTime = performance.now();
-        let lastDrawTime = -1.0;// In milliseconds
-        let lastJsTime = -1.0;// In milliseconds
+        client_promise.then( (client) => {
+            canvas.client = client;
 
-        function render(time) {
-            window.requestAnimationFrame(render);
-            const currTime = time;
+            const FPS_THROTTLE = 1000.0 / 300.0; // milliseconds / frames
+            const JS_THROTTLE = 1000.0 / 10.0; // milliseconds / frames
+            const js_event = new CustomEvent('rust_state', {});
 
-            if (currTime >= lastDrawTime + FPS_THROTTLE) {
-                lastDrawTime = currTime;
+            const initialTime = performance.now();
+            let lastDrawTime = -1.0;// In milliseconds
+            let lastJsTime = -1.0;// In milliseconds
 
-                if (window.innerHeight !== canvas.height || window.innerWidth !== canvas.width) {
-                    canvas.height = window.innerHeight;
-                    canvas.style.height = window.innerHeight;
+            function render(time) {
+                window.requestAnimationFrame(render);
+                const currTime = time;
 
-                    canvas.width = window.innerWidth;
-                    canvas.style.width = window.innerWidth;
+                if (currTime >= lastDrawTime + FPS_THROTTLE) {
+                    lastDrawTime = currTime;
 
-                    gl.viewport(0, 0, window.innerWidth, window.innerHeight);
-                }
+                    if (window.innerHeight !== canvas.height || window.innerWidth !== canvas.width) {
+                        canvas.height = window.innerHeight;
+                        canvas.style.height = window.innerHeight;
 
-                let elapsedTime = currTime - initialTime;
+                        canvas.width = window.innerWidth;
+                        canvas.style.width = window.innerWidth;
 
-                canvas.rust_state = 
-                    canvas.client.update(
-                        elapsedTime, 
-                        window.innerHeight, 
-                        window.innerWidth, 
-                        canvas.held_keys, 
-                        canvas.movement2, 
-                        document.pointerLockElement === canvas,
-                        canvas.messages,
-                        );
+                        gl.viewport(0, 0, window.innerWidth, window.innerHeight);
+                    }
 
-                canvas.client.render();
+                    let elapsedTime = currTime - initialTime;
 
-                //Clear things 
-                canvas.movement2.x = 0;
-                canvas.movement2.y = 0;
-                canvas.messages = [];
+                    canvas.rust_state = 
+                        canvas.client.update(
+                            elapsedTime, 
+                            window.innerHeight, 
+                            window.innerWidth, 
+                            canvas.held_keys, 
+                            canvas.movement2, 
+                            document.pointerLockElement === canvas,
+                            canvas.messages,
+                            );
 
-                if (currTime >= lastJsTime + JS_THROTTLE) {
-                    lastJsTime = currTime;
-                    setTimeout(() => canvas.parentNode.dispatchEvent(js_event));
+                    canvas.client.render();
+
+                    //Clear things 
+                    canvas.movement2.x = 0;
+                    canvas.movement2.y = 0;
+                    canvas.messages = [];
+
+                    if (currTime >= lastJsTime + JS_THROTTLE) {
+                        lastJsTime = currTime;
+                        setTimeout(() => canvas.parentNode.dispatchEvent(js_event));
+                    }
                 }
             }
-        }
-        render(initialTime);
+            render(initialTime);
+        });
     }
 }
 

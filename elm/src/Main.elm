@@ -22,9 +22,7 @@ import Browser.Events
 import Time
 import Key
 
-
 -- MAIN
-
 
 main =
     Browser.element
@@ -125,7 +123,8 @@ update msg model =
                     let rmsg = if model.focused then Unfocus else Focus
                     in
                     ( { model | focused = not model.focused }
-                    , RustCanvas.sendRustMsg model.rust_ref rmsg                    )
+                    , RustCanvas.sendRustMsg model.rust_ref rmsg
+                    )
 
                 other -> 
                     let _ = Debug.log "key" other
