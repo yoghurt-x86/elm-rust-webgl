@@ -41,13 +41,11 @@ impl Texture {
 
         let indices_rect: [u16; 6] = [0, 1, 2, 2, 1, 3];
 
-        let uv_coords:  [f32; 12] = [ 
-            0., 2.,
-            0., 0.,
+        let uv_coords:  [f32; 8] = [ 
             1., 1.,
-            1., 1.,
-            0., 0.,
             1., 0.,
+            0., 1.,
+            0., 0.,
         ];
 
         let memory_buffer = wasm_bindgen::memory()
@@ -128,17 +126,6 @@ impl Texture {
             GL::UNSIGNED_BYTE,
             Some(&img_array),
         ).unwrap();
-        // Fill the texture with a 1x1 blue pixel.
-        //gl.tex_image_2d_with_u32_and_u32_and_image(//tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_array_buffer_view(
-        //    GL::TEXTURE_2D, //target 
-        //    0,
-        //    GL::RGBA as i32,  //inernalFormat
-        //    0,
-        //    GL::RGBA,  
-        //    img,
-        //).unwrap();
-        //cf::log(&format!("{:?}", img.height()));
-
 
         Self {
             u_transform: gl.get_uniform_location(&program, "uTransform").unwrap(),
@@ -159,7 +146,11 @@ impl Texture {
         gl: &WebGlRenderingContext,
         app: &AppState,
     ) {
-        let rotate_flat = na::Rotation3::from_euler_angles(0., 0., 32. * std::f32::consts::PI / 180.).to_homogeneous();
+
+
+        
+
+        let rotate_flat = na::Rotation3::from_euler_angles((app.time / 13.) * std::f32::consts::PI / 180., (app.time / 23.) * std::f32::consts::PI / 180., 0.).to_homogeneous();
         let translate_y = na::Matrix4::new_translation(&na::Vector3::new(0.,0.5,0.));
         let model_transform = translate_y * rotate_flat;
 

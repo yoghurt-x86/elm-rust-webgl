@@ -63,12 +63,30 @@ impl Movement {
     }
 }
 
+pub async fn load_assets2() -> Result<HtmlImageElement, JsValue> {
+    let url = "/assets/images/andi.jpg";
+
+    let promise = js_sys::Promise::new(&mut |resolve: js_sys::Function, reject: js_sys::Function| {
+        let image = Rc::new(RefCell::new(HtmlImageElement::new().unwrap()));
+        image.borrow_mut().set_src(&url);
+        let i = image.clone();
+        let cb = Closure::once(move |event : web_sys::Event | {
+            resolve.apply(&JsValue::NULL, &js_sys::Array::of1(&i.borrow())).unwrap();
+        });
+        image.borrow_mut().add_event_listener_with_callback("load", cb.as_ref().unchecked_ref()).unwrap();
+        cb.forget()
+    });
+
+    let res = wasm_bindgen_futures::JsFuture::from(promise).await?; 
+    Ok(res.dyn_into::<HtmlImageElement>().unwrap())
+}
+
 pub async fn load_assets() -> Result<HtmlImageElement, JsValue> {
     let mut opts = RequestInit::new();
     opts.method("GET");
     opts.mode(RequestMode::Cors);
 
-    let url = "https://webglfundamentals.org/webgl/resources/f-texture.png";
+    let url = "/assets/images/andi.jpg";
 
     let request = Request::new_with_str_and_init(&url, &opts)?;
 
@@ -113,9 +131,13 @@ impl Client {
             gl.clear_color(0.0, 0.0, 0.0, 1.0); //RGBA
             gl.clear_depth(1.);
         }
+        let tex2 = load_assets2().await.unwrap();
+        cf::log(&format!("height is: {:?}", tex2.height()));
 
         let program_color_2d = programs::Color2D::new(&rgl.borrow());
         let program_texture = Rc::new(RefCell::new(programs::Texture::new(&rgl.borrow())));
+
+
 
         let texture = Rc::new(RefCell::new(load_assets().await.unwrap()));
 
