@@ -201,6 +201,22 @@ view model =
                     ] 
                     [] 
                 ]
+            , label [ for "input-light-color"] 
+                [ text <| "Sunlight color: "                 
+                , input 
+                    [ id "input-light-color"
+                    , type_ "color"
+                    ] 
+                    [] 
+                ]
+            , label [ for "input-ambient-color"] 
+                [ text <| "ambient light color: "                 
+                , input 
+                    [ id "input-ambient-color"
+                    , type_ "color"
+                    ] 
+                    [] 
+                ]
             ]
         , RustCanvas.view
             |> Html.map GotRustRef

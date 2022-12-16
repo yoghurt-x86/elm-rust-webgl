@@ -1,6 +1,4 @@
 use wasm_bindgen::JsCast;
-use std::rc::Rc;
-use wasm_bindgen::prelude::*;
 use web_sys::WebGlRenderingContext as GL;
 use web_sys::*;
 use js_sys::WebAssembly;
@@ -25,7 +23,7 @@ pub struct Texture {
 
 #[allow(dead_code)]
 impl Texture {
-    pub fn new(gl: &WebGlRenderingContext) -> Self {
+    pub fn new(gl: &WebGlRenderingContext, image : HtmlImageElement) -> Self {
         let program = cf::link_program(
             &gl,
             super::super::shaders::vertex::texture::SHADER,
@@ -97,36 +95,18 @@ impl Texture {
             GL::STATIC_DRAW,
             );
 
-
         let texture = gl.create_texture().unwrap();
         gl.bind_texture(GL::TEXTURE_2D, Some(&texture));
-
-        let img : [u8; 3] = [
-            255, 120, 25, 
-        ];
-
-        let img_memory_buffer = wasm_bindgen::memory()
-            .dyn_into::<WebAssembly::Memory>()
-            .unwrap()
-            .buffer();
-        let img_location = img.as_ptr() as u32;
-        let img_array = js_sys::Uint8Array::new(&img_memory_buffer).subarray(
-            img_location,
-            img_location + img.len() as u32,
-        );
-        
-        gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_array_buffer_view(
+        gl.tex_image_2d_with_u32_and_u32_and_image(
             GL::TEXTURE_2D, //target 
             0,
-            GL::RGB as i32,  //inernalFormat
-            1, 
-            1,
-            0,
-            GL::RGB,  
+            GL::RGBA as i32,  //inernalFormat
+            GL::RGBA,  
             GL::UNSIGNED_BYTE,
-            Some(&img_array),
+            &image,
         ).unwrap();
-
+        gl.generate_mipmap(GL::TEXTURE_2D);
+        
         Self {
             u_transform: gl.get_uniform_location(&program, "uTransform").unwrap(),
             a_position: gl.get_attrib_location(&program, "aPosition"),
@@ -146,10 +126,6 @@ impl Texture {
         gl: &WebGlRenderingContext,
         app: &AppState,
     ) {
-
-
-        
-
         let rotate_flat = na::Rotation3::from_euler_angles((app.time / 13.) * std::f32::consts::PI / 180., (app.time / 23.) * std::f32::consts::PI / 180., 0.).to_homogeneous();
         let translate_y = na::Matrix4::new_translation(&na::Vector3::new(0.,0.5,0.));
         let model_transform = translate_y * rotate_flat;
@@ -166,6 +142,8 @@ impl Texture {
         let transform =  camera_transform * model_transform ; //* translation * scale;
 
         gl.use_program(Some(&self.program));
+
+
 
         // positions
         gl.enable_vertex_attrib_array(self.a_position as u32);

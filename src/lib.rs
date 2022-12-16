@@ -1,14 +1,12 @@
 use wasm_bindgen::prelude::*;
 use web_sys::*;
-use std::sync::{Arc, Mutex};
 use std::cell::RefCell;
 use wasm_bindgen::JsCast;
 use std::rc::Rc;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::WebGlRenderingContext as GL;
 use web_sys::{Response, Request, RequestMode, RequestInit};
-use web_sys::{Url};
-use futures::executor::block_on;
+use futures::future::try_join_all;
 use common_funcs as cf;
 use serde::{Serialize, Deserialize};
 
@@ -18,6 +16,7 @@ extern crate lazy_static;
 mod app_state;
 mod programs;
 mod common_funcs;
+mod smd;
 mod shaders;
 
 
@@ -34,7 +33,8 @@ pub struct Client {
     canvas: web_sys::HtmlCanvasElement,
     gl: Rc<RefCell<WebGlRenderingContext>>,
     program_color_2d: programs::Color2D,
-    program_texture: Rc<RefCell<programs::Texture>>,
+//    program_texture: programs::Texture,
+    program_mesh: programs::MeshProgram,
     count: Rc<RefCell<Vec<u32>>>,
 }
 
@@ -63,66 +63,66 @@ impl Movement {
     }
 }
 
-pub async fn load_assets2() -> Result<HtmlImageElement, JsValue> {
-    let url = "/assets/images/andi.jpg";
+pub async fn load_model() -> Result<String, JsValue> {
+    let mut opts = RequestInit::new();
+    opts.method("GET");
+    opts.mode(RequestMode::Cors);
 
-    let promise = js_sys::Promise::new(&mut |resolve: js_sys::Function, reject: js_sys::Function| {
+    let url = "/assets/playerstart.txt";
+    let request = Request::new_with_str_and_init(&url, &opts)?;
+    request
+        .headers()
+        .set("Accept", "text/plain")?;
+
+    let window = web_sys::window().unwrap();
+    let resp_value = JsFuture::from(window.fetch_with_request(&request)).await?;
+    let resp: Response = resp_value.dyn_into().unwrap();
+
+    // Convert this other `Promise` into a rust `Future`.
+    let txt : String = JsFuture::from(resp.text()?).await?.as_string().unwrap();
+
+    // Send the `Branch` struct back to JS as an `Object`.
+    Ok(txt)
+}
+
+pub async fn load_assets() -> Result<HtmlImageElement, JsValue> {
+    let url = "/assets/images/orange.png";
+    let promise = js_sys::Promise::new(&mut |resolve: js_sys::Function, _reject: js_sys::Function| {
         let image = Rc::new(RefCell::new(HtmlImageElement::new().unwrap()));
         image.borrow_mut().set_src(&url);
         let i = image.clone();
-        let cb = Closure::once(move |event : web_sys::Event | {
+        let cb = Closure::once(move |_event : web_sys::Event | {
             resolve.apply(&JsValue::NULL, &js_sys::Array::of1(&i.borrow())).unwrap();
         });
         image.borrow_mut().add_event_listener_with_callback("load", cb.as_ref().unchecked_ref()).unwrap();
         cb.forget()
     });
-
     let res = wasm_bindgen_futures::JsFuture::from(promise).await?; 
     Ok(res.dyn_into::<HtmlImageElement>().unwrap())
 }
 
-pub async fn load_assets() -> Result<HtmlImageElement, JsValue> {
-    let mut opts = RequestInit::new();
-    opts.method("GET");
-    opts.mode(RequestMode::Cors);
-
-    let url = "/assets/images/andi.jpg";
-
-    let request = Request::new_with_str_and_init(&url, &opts)?;
-
-    request
-        .headers()
-        .set("Accept", "application/vnd.github.v3+json")?;
-
-    let window = web_sys::window().unwrap();
-    let resp_value = JsFuture::from(window.fetch_with_request(&request)).await?;
-
-    // `resp_value` is a `Response` object.
-    //assert!(resp_value.is_instance_of::<Response>());
-    let resp: Response = resp_value.dyn_into().unwrap();
-
-    // Convert this other `Promise` into a rust `Future`.
-    let val = JsFuture::from(resp.blob()?).await?;
-
-    let blob: Blob = val.dyn_into().unwrap();
-
-    let asd = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
-    let image = HtmlImageElement::new().unwrap();
-    image.set_src(&asd);
-
-    // Send the JSON response back to JS.
-    Ok(image)
+pub async fn load_texture(url: &str) -> Result<HtmlImageElement, JsValue> {
+    let promise = js_sys::Promise::new(&mut |resolve: js_sys::Function, _reject: js_sys::Function| {
+        let image = Rc::new(RefCell::new(HtmlImageElement::new().unwrap()));
+        image.borrow_mut().set_src(&url);
+        let i = image.clone();
+        let cb = Closure::once(move |_event : web_sys::Event | {
+            resolve.apply(&JsValue::NULL, &js_sys::Array::of1(&i.borrow())).unwrap();
+        });
+        image.borrow_mut().add_event_listener_with_callback("load", cb.as_ref().unchecked_ref()).unwrap();
+        cb.forget()
+    });
+    let res = wasm_bindgen_futures::JsFuture::from(promise).await?; 
+    Ok(res.dyn_into::<HtmlImageElement>().unwrap())
 }
 
 #[wasm_bindgen]
 impl Client {
     #[wasm_bindgen(constructor)]
     pub async fn new(element: Element) -> Self {
-
         let canvas: web_sys::HtmlCanvasElement = element.dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
         let gl_: WebGlRenderingContext = canvas.get_context("webgl").unwrap().unwrap().dyn_into().unwrap();
         let rgl : Rc<RefCell<WebGlRenderingContext>> = Rc::new(RefCell::new(gl_));
-
 
         {
             let gl = rgl.borrow_mut();
@@ -131,21 +131,47 @@ impl Client {
             gl.clear_color(0.0, 0.0, 0.0, 1.0); //RGBA
             gl.clear_depth(1.);
         }
-        let tex2 = load_assets2().await.unwrap();
-        cf::log(&format!("height is: {:?}", tex2.height()));
+        let player = load_model().await.unwrap();
+
+        let mesh = smd::parse_smd(&player).unwrap();
+        let mut assets = mesh.iter().map(|m| format!("/assets/images/{}.png", m.0)).collect::<Vec<String>>();
+
+
+        let depth_map = load_texture("/assets/images/depth_layer_small.png").await.unwrap();
+
+
+        let textures = try_join_all(assets.iter().map(|m| load_texture(&m))).await.unwrap();
+        let tex2 = load_assets().await.unwrap();
+
+        let skybox_links = vec!
+                ["/assets/images/sky_hr_aztecup.png",
+                 "/assets/images/sky_hr_aztecrt.png",
+                 "/assets/images/sky_hr_azteclf.png",
+                 "/assets/images/sky_hr_aztecft.png",
+                 "/assets/images/sky_hr_aztecdn.png",
+                 "/assets/images/sky_hr_aztecbk.png",
+                ];
+
+        let skybox_textures = try_join_all(skybox_links.iter().map(|src| load_texture(src))).await.unwrap();
 
         let program_color_2d = programs::Color2D::new(&rgl.borrow());
-        let program_texture = Rc::new(RefCell::new(programs::Texture::new(&rgl.borrow())));
+        //let program_texture = programs::Texture::new(
+        //    &rgl.borrow(), 
+        //    tex2,
+        //);
+        let program_mesh = programs::MeshProgram::new(
+            &rgl.borrow(), 
+            &mesh,
+            &textures,
+            &skybox_textures,
+            &depth_map,
+        );
 
-
-
-        let texture = Rc::new(RefCell::new(load_assets().await.unwrap()));
-
+        cf::log(&format!("height is: {:?}", tex2.height()));
         let count2 : Rc<RefCell<Vec<u32>>> = Rc::new(RefCell::new(Vec::new()));
-
         {
             let c = count2.clone();
-            let closure = Closure::<dyn FnMut(_)>::new(move |event: web_sys::MouseEvent| {
+            let closure = Closure::<dyn FnMut(_)>::new(move |_event: web_sys::MouseEvent| {
                 let mut refe = c.borrow_mut();
                 refe.push(1);
                 cf::log("count");
@@ -153,35 +179,11 @@ impl Client {
             canvas.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref()).unwrap();
             closure.forget();
         }
-
-        {
-            let t = texture.clone();
-            let poo = rgl.clone();
-            let program = program_texture.clone();
-            let closure = Closure::<dyn FnMut(_)>::new(move |event: web_sys::MouseEvent| {
-                let gl = poo.borrow_mut();
-                gl.bind_texture(GL::TEXTURE_2D, Some(&program.borrow().texture));
-                gl.tex_image_2d_with_u32_and_u32_and_image(
-                    GL::TEXTURE_2D, //target 
-                    0,
-                    GL::RGBA as i32,  //inernalFormat
-                    GL::RGBA,  
-                    GL::UNSIGNED_BYTE,
-                    &t.borrow(),
-                ).unwrap();
-                gl.generate_mipmap(GL::TEXTURE_2D);
-                cf::log("texture");
-                cf::log(&format!("texture: {:?}", gl));
-                cf::log(&format!("texture: {:?}", t.borrow().height()));
-            });
-            texture.borrow_mut().add_event_listener_with_callback("load", closure.as_ref().unchecked_ref()).unwrap();
-            closure.forget();
-        }
-
         Self {
             canvas: canvas,
             program_color_2d: program_color_2d,
-            program_texture: program_texture,
+            //program_texture: program_texture,
+            program_mesh: program_mesh,
             gl: rgl,
             count: count2
         }
@@ -224,7 +226,6 @@ impl Client {
     }
 
     pub fn render(&self) {
-
         let gl = self.gl.borrow_mut();
 
         gl.enable(GL::CULL_FACE);
@@ -238,7 +239,11 @@ impl Client {
              &curr_state,
          );
 
-        self.program_texture.borrow_mut().render(
+        //self.program_texture.render(
+        //     &gl,
+        //     &curr_state,
+        // );
+        self.program_mesh.render(
              &gl,
              &curr_state,
          );

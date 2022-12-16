@@ -5,9 +5,9 @@
     <title>hello-wasm example</title>
     <link href="https://unpkg.com/bonsai.css@latest/dist/bonsai.min.css" rel="stylesheet">
 
-    <link rel="modulepreload" href="/pkg/hello_wasm.js">
-    <link rel="modulepreload" href="/assets/js/rustcanvas.js">
-    <link rel="modulepreload" href="/pkg/hello_wasm_bg.wasm">
+    <link rel="modulepreload" href="./pkg/info_player_start.js">
+    <link rel="modulepreload" href="./assets/js/rustcanvas.js">
+    <link rel="modulepreload" href="./pkg/info_player_start_bg.wasm">
     <script src="/assets/js/elm.js"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,7 +25,7 @@
   <body style="background:black;margin:0;overflow:hidden;font-family:'vt323';">
     <div id="elm"></div>
     <script type="module">
-        import { RustCanvas } from "/assets/js/rustcanvas.js";
+        import { RustCanvas } from "./assets/js/rustcanvas.js";
 
         customElements.define("rust-canvas", RustCanvas);
 

@@ -1,8 +1,8 @@
 pub const SHADER: &str = r#"
-    attribute vec4 aPosition;
+    attribute vec4 a_position;
     attribute vec2 a_texcoord;
 
-    uniform mat4 uTransform;
+    uniform mat4 u_transform;
 
     varying vec2 v_texcoord;
 

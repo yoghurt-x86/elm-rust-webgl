@@ -68,9 +68,9 @@ impl Color2D {
             );
 
         Self {
-            u_color: gl.get_uniform_location(&program, "uColor").unwrap(),
-            u_opacity: gl.get_uniform_location(&program, "uOpacity").unwrap(),
-            u_transform: gl.get_uniform_location(&program, "uTransform").unwrap(),
+            u_color: gl.get_uniform_location(&program, "u_color").unwrap(),
+            u_opacity: gl.get_uniform_location(&program, "u_opacity").unwrap(),
+            u_transform: gl.get_uniform_location(&program, "u_transform").unwrap(),
             index_count: indices_array.length() as i32,
             index_buffer:  buffer_indices,
             rect_vertice_ary_length: vertices_rect.len(),
@@ -116,7 +116,6 @@ impl Color2D {
         
 
         let transform =  camera_transform * model_transform ; 
-        //let transform_mat = cf::mult_matrix_4(scale_mat, translation_mat);
 
 
         gl.uniform_matrix4fv_with_f32_array(Some(&self.u_transform), false, transform.as_slice());

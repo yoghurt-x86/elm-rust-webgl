@@ -1,7 +1,7 @@
 pub const SHADER: &str = r#"
-    attribute vec4 aPosition;
-    uniform mat4 uTransform;
+    attribute vec4 a_position;
+    uniform mat4 u_transform;
     void main() {
-        gl_Position = uTransform * aPosition;
+        gl_Position = u_transform * a_position;
     }
 "#;
