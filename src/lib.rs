@@ -68,7 +68,7 @@ pub async fn load_model() -> Result<String, JsValue> {
     opts.method("GET");
     opts.mode(RequestMode::Cors);
 
-    let url = "/assets/playerstart.txt";
+    let url = "./assets/playerstart.txt";
     let request = Request::new_with_str_and_init(&url, &opts)?;
     request
         .headers()
@@ -83,22 +83,6 @@ pub async fn load_model() -> Result<String, JsValue> {
 
     // Send the `Branch` struct back to JS as an `Object`.
     Ok(txt)
-}
-
-pub async fn load_assets() -> Result<HtmlImageElement, JsValue> {
-    let url = "/assets/images/orange.png";
-    let promise = js_sys::Promise::new(&mut |resolve: js_sys::Function, _reject: js_sys::Function| {
-        let image = Rc::new(RefCell::new(HtmlImageElement::new().unwrap()));
-        image.borrow_mut().set_src(&url);
-        let i = image.clone();
-        let cb = Closure::once(move |_event : web_sys::Event | {
-            resolve.apply(&JsValue::NULL, &js_sys::Array::of1(&i.borrow())).unwrap();
-        });
-        image.borrow_mut().add_event_listener_with_callback("load", cb.as_ref().unchecked_ref()).unwrap();
-        cb.forget()
-    });
-    let res = wasm_bindgen_futures::JsFuture::from(promise).await?; 
-    Ok(res.dyn_into::<HtmlImageElement>().unwrap())
 }
 
 pub async fn load_texture(url: &str) -> Result<HtmlImageElement, JsValue> {
@@ -134,22 +118,21 @@ impl Client {
         let player = load_model().await.unwrap();
 
         let mesh = smd::parse_smd(&player).unwrap();
-        let mut assets = mesh.iter().map(|m| format!("/assets/images/{}.png", m.0)).collect::<Vec<String>>();
+        let mut assets = mesh.iter().map(|m| format!("./assets/images/{}.png", m.0)).collect::<Vec<String>>();
 
 
-        let depth_map = load_texture("/assets/images/depth_layer_small.png").await.unwrap();
+        let depth_map = load_texture("./assets/images/depth_layer_small.png").await.unwrap();
 
 
         let textures = try_join_all(assets.iter().map(|m| load_texture(&m))).await.unwrap();
-        let tex2 = load_assets().await.unwrap();
 
         let skybox_links = vec!
-                ["/assets/images/sky_hr_aztecup.png",
-                 "/assets/images/sky_hr_aztecrt.png",
-                 "/assets/images/sky_hr_azteclf.png",
-                 "/assets/images/sky_hr_aztecft.png",
-                 "/assets/images/sky_hr_aztecdn.png",
-                 "/assets/images/sky_hr_aztecbk.png",
+                ["./assets/images/sky_hr_aztecup.png",
+                 "./assets/images/sky_hr_aztecrt.png",
+                 "./assets/images/sky_hr_azteclf.png",
+                 "./assets/images/sky_hr_aztecft.png",
+                 "./assets/images/sky_hr_aztecdn.png",
+                 "./assets/images/sky_hr_aztecbk.png",
                 ];
 
         let skybox_textures = try_join_all(skybox_links.iter().map(|src| load_texture(src))).await.unwrap();
@@ -167,7 +150,6 @@ impl Client {
             &depth_map,
         );
 
-        cf::log(&format!("height is: {:?}", tex2.height()));
         let count2 : Rc<RefCell<Vec<u32>>> = Rc::new(RefCell::new(Vec::new()));
         {
             let c = count2.clone();
