@@ -127,8 +127,6 @@ update msg model =
                     )
 
                 other -> 
-                    let _ = Debug.log "key" other
-                    in
                     ( model 
                     , Cmd.none
                     )

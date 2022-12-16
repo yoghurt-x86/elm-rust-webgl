@@ -1,4 +1,4 @@
-import init, {Client, Movement} from "/pkg/info_player_start.js";
+import init, {Client, Movement} from "../../pkg/info_player_start.js";
 
 const m = await init();
 
