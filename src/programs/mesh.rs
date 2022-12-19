@@ -2,6 +2,8 @@ use wasm_bindgen::JsCast;
 use web_sys::WebGlRenderingContext as GL;
 use web_sys::*;
 use js_sys::WebAssembly;
+use crate::app_state;
+
 use super::super::common_funcs as cf;
 use super::super::app_state::AppState;
 use super::super::smd::Mesh;
@@ -277,11 +279,10 @@ impl MeshProgram {
         view_inverse[13] = 0.0;
         view_inverse[14] = 0.0;
 
-        let viewDirection = perspective.as_matrix() * view_inverse;
+        let view_direction = perspective.as_matrix() * view_inverse;
 
         let camera_transform = perspective.as_matrix() * view.to_homogeneous();
-        let view_direction_inverse = viewDirection.try_inverse().unwrap_or(na::base::Matrix4::identity());
-        //let transform =  camera_transform; 
+        let view_direction_inverse = view_direction.try_inverse().unwrap_or(na::base::Matrix4::identity());
 
         gl.use_program(Some(&self.program));
         gl.depth_func(GL::LESS);
@@ -293,7 +294,7 @@ impl MeshProgram {
         let light_dir_eye_coord = view_inverse.transform_vector(&light_dir).normalize();
         let light_dir_perspective = perspective.as_matrix().transform_point(&na::Point3::from_coordinates(light_dir_eye_coord)); 
 
-        cf::log(&format!("{:?}", light_dir_perspective));
+        //cf::log(&format!("{:?}", light_dir_perspective));
 
         gl.uniform3f(
             Some(&self.u_light_direction),
@@ -301,11 +302,15 @@ impl MeshProgram {
         );
         gl.uniform3f(
             Some(&self.u_ambient_light),
-            0.3, 0.3, 0.4
+            app.ambient_light_color.x,
+            app.ambient_light_color.y,
+            app.ambient_light_color.z,
         );
         gl.uniform3f(
             Some(&self.u_env_light),
-            1.0, 1.0, 0.8
+            app.env_light_color.x,
+            app.env_light_color.y,
+            app.env_light_color.z,
         );
 
         for buffer in &self.buffers {

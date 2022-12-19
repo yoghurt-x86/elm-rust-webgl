@@ -91,6 +91,7 @@ export class RustCanvas extends HTMLElement{
                             canvas.messages,
                             );
 
+
                     canvas.client.render();
 
                     //Clear things 

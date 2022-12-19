@@ -8,7 +8,7 @@ use web_sys::WebGlRenderingContext as GL;
 use web_sys::{Response, Request, RequestMode, RequestInit};
 use futures::future::try_join_all;
 use common_funcs as cf;
-use serde::{Serialize, Deserialize};
+use elm_rust::Msg;
 
 #[macro_use]
 extern crate lazy_static;
@@ -19,15 +19,6 @@ mod common_funcs;
 mod smd;
 mod shaders;
 
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum Msg {
-    Focus,
-    Unfocus,
-    ChangeFOV { angle: f32},
-}
-
 #[wasm_bindgen]
 pub struct Client {
     canvas: web_sys::HtmlCanvasElement,
@@ -35,7 +26,7 @@ pub struct Client {
     program_color_2d: programs::Color2D,
 //    program_texture: programs::Texture,
     program_mesh: programs::MeshProgram,
-    count: Rc<RefCell<Vec<u32>>>,
+    state: app_state::AppState,
 }
 
 #[derive(Debug)]
@@ -118,11 +109,9 @@ impl Client {
         let player = load_model().await.unwrap();
 
         let mesh = smd::parse_smd(&player).unwrap();
-        let mut assets = mesh.iter().map(|m| format!("./assets/images/{}.png", m.0)).collect::<Vec<String>>();
-
+        let assets = mesh.iter().map(|m| format!("./assets/images/{}.png", m.0)).collect::<Vec<String>>();
 
         let depth_map = load_texture("./assets/images/depth_layer_small.png").await.unwrap();
-
 
         let textures = try_join_all(assets.iter().map(|m| load_texture(&m))).await.unwrap();
 
@@ -150,41 +139,28 @@ impl Client {
             &depth_map,
         );
 
-        let count2 : Rc<RefCell<Vec<u32>>> = Rc::new(RefCell::new(Vec::new()));
-        {
-            let c = count2.clone();
-            let closure = Closure::<dyn FnMut(_)>::new(move |_event: web_sys::MouseEvent| {
-                let mut refe = c.borrow_mut();
-                refe.push(1);
-                cf::log("count");
-            });
-            canvas.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref()).unwrap();
-            closure.forget();
-        }
         Self {
             canvas: canvas,
             program_color_2d: program_color_2d,
             //program_texture: program_texture,
             program_mesh: program_mesh,
             gl: rgl,
-            count: count2
+            state: app_state::AppState::new(),
         }
     }
 
     pub fn update(
         &mut self, 
         time: f32, 
-        height: f32, 
-        width: f32,
+        canvas_height: f32, 
+        canvas_width: f32,
         held_keys: js_sys::Set,
         mouse_movement: &Movement, 
         viewport_active: bool,
         messages: js_sys::Array,
         ) -> Result<app_state::OutMsg, JsValue> {
 
-        cf::log(&format!("{:?}", self.count.borrow()));
-
-        let s : Vec<String> = {
+        let keyboard_input: Vec<String> = {
             let mut keys = Vec::new();
             for val in held_keys.values() {
                 keys.push(val?.as_string().unwrap());
@@ -192,19 +168,31 @@ impl Client {
             keys
         };
 
-        let mut new_angle = None;
+        self.state.update_canvas_dimensions(canvas_height, canvas_width);
+
+        self.state.update_camera(
+            time,
+            &keyboard_input, 
+            viewport_active, 
+            mouse_movement);
+
         for msg in messages.iter() {
             let m : Msg = serde_wasm_bindgen::from_value(msg).unwrap();
-            match m {
-                Msg::Focus => self.canvas.request_pointer_lock(),
-                Msg::Unfocus => window().unwrap().document().unwrap().exit_pointer_lock(),
-                Msg::ChangeFOV { angle } => new_angle = Some(angle),
-            }
+            self.state.handle_msg(m, &self.canvas);
         }
 
-        let out = app_state::update_dynamic_data(time, height, width, &s, viewport_active, mouse_movement, new_angle);
-        
-        Ok(out)
+        let fps = 1000. / (time - self.state.time);
+        self.state.time = time;
+        Ok(app_state::OutMsg { 
+            time: time, 
+            fps: fps, 
+            env_light_color_r: self.state.env_light_color.x, 
+            env_light_color_g: self.state.env_light_color.y,
+            env_light_color_b: self.state.env_light_color.z,
+            ambient_light_color_r: self.state.ambient_light_color.x, 
+            ambient_light_color_g: self.state.ambient_light_color.y,
+            ambient_light_color_b: self.state.ambient_light_color.z,
+        })
     }
 
     pub fn render(&self) {
@@ -214,7 +202,7 @@ impl Client {
         gl.enable(GL::DEPTH_TEST);
         gl.clear(GL::COLOR_BUFFER_BIT | GL::DEPTH_BUFFER_BIT);
 
-        let curr_state = app_state::get_curr_state();
+        let curr_state = self.state;
 
         self.program_color_2d.render(
              &gl,

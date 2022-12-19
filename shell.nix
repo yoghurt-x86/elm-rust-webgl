@@ -2,6 +2,7 @@
 pkgs.mkShell {
   buildInputs = [
     pkgs.inotify-tools
+    pkgs.nodejs-16_x
     pkgs.elmPackages.elm
     pkgs.elmPackages.elm-format
     pkgs.elmPackages.elm-test

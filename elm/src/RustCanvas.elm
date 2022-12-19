@@ -1,7 +1,9 @@
-port module RustCanvas exposing (Msg(..), sendRustMsg, view, decodeValue, RustState, uninitialized)
+port module RustCanvas exposing (sendRustMsg, view, decodeValue, RustState, uninitialized)
+import Rust
 
 
 import Browser
+import Rust exposing (Msg(..))
 import Color
 import Date
 import Dict exposing (Dict)
@@ -27,38 +29,13 @@ uninitialized =
     RustState E.null
 
 
-type Msg 
-    = Focus
-    | Unfocus
-    | ChangeFOV Float
-
-
-msgString : Msg -> String 
-msgString msg =
-    case msg of 
-        Focus -> "Focus"
-        Unfocus -> "Unfocus"
-        ChangeFOV _ -> "ChangeFOV"
-
-
-msgData : Msg -> List (String, E.Value)
-msgData msg =
-    case msg of 
-        Focus -> []
-        Unfocus -> []
-        ChangeFOV degrees -> 
-            [( "angle", E.float degrees)]
-
-
 sendRustMsg : RustState -> Msg -> Cmd msg
 sendRustMsg (RustState value) msg =
     let obj = 
             E.object <|
                 [ ("rust_canvas", value)
                 , ("msg"
-                  , E.object <| 
-                      ("type" , E.string (msgString msg))
-                         :: (msgData msg)
+                  , Rust.msgEncoder msg
                   )
                 ]
     in 

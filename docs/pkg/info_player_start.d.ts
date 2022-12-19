@@ -10,18 +10,23 @@ export class Client {
   constructor(element: Element);
 /**
 * @param {number} time
-* @param {number} height
-* @param {number} width
+* @param {number} canvas_height
+* @param {number} canvas_width
 * @param {Set<any>} held_keys
 * @param {Movement} mouse_movement
 * @param {boolean} viewport_active
 * @param {Array<any>} messages
 * @returns {OutMsg}
 */
-  update(time: number, height: number, width: number, held_keys: Set<any>, mouse_movement: Movement, viewport_active: boolean, messages: Array<any>): OutMsg;
+  update(time: number, canvas_height: number, canvas_width: number, held_keys: Set<any>, mouse_movement: Movement, viewport_active: boolean, messages: Array<any>): OutMsg;
 /**
 */
   render(): void;
+}
+/**
+*/
+export class Color {
+  free(): void;
 }
 /**
 */
@@ -49,6 +54,24 @@ export class OutMsg {
   free(): void;
 /**
 */
+  ambient_light_color_b: number;
+/**
+*/
+  ambient_light_color_g: number;
+/**
+*/
+  ambient_light_color_r: number;
+/**
+*/
+  env_light_color_b: number;
+/**
+*/
+  env_light_color_g: number;
+/**
+*/
+  env_light_color_r: number;
+/**
+*/
   fps: number;
 /**
 */
@@ -59,11 +82,6 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly __wbg_outmsg_free: (a: number) => void;
-  readonly __wbg_get_outmsg_time: (a: number) => number;
-  readonly __wbg_set_outmsg_time: (a: number, b: number) => void;
-  readonly __wbg_get_outmsg_fps: (a: number) => number;
-  readonly __wbg_set_outmsg_fps: (a: number, b: number) => void;
   readonly __wbg_client_free: (a: number) => void;
   readonly __wbg_movement_free: (a: number) => void;
   readonly __wbg_get_movement_x: (a: number) => number;
@@ -75,10 +93,28 @@ export interface InitOutput {
   readonly client_new: (a: number) => number;
   readonly client_update: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => void;
   readonly client_render: (a: number) => void;
+  readonly __wbg_color_free: (a: number) => void;
+  readonly __wbg_outmsg_free: (a: number) => void;
+  readonly __wbg_get_outmsg_time: (a: number) => number;
+  readonly __wbg_set_outmsg_time: (a: number, b: number) => void;
+  readonly __wbg_get_outmsg_fps: (a: number) => number;
+  readonly __wbg_set_outmsg_fps: (a: number, b: number) => void;
+  readonly __wbg_get_outmsg_env_light_color_r: (a: number) => number;
+  readonly __wbg_set_outmsg_env_light_color_r: (a: number, b: number) => void;
+  readonly __wbg_get_outmsg_env_light_color_g: (a: number) => number;
+  readonly __wbg_set_outmsg_env_light_color_g: (a: number, b: number) => void;
+  readonly __wbg_get_outmsg_env_light_color_b: (a: number) => number;
+  readonly __wbg_set_outmsg_env_light_color_b: (a: number, b: number) => void;
+  readonly __wbg_get_outmsg_ambient_light_color_r: (a: number) => number;
+  readonly __wbg_set_outmsg_ambient_light_color_r: (a: number, b: number) => void;
+  readonly __wbg_get_outmsg_ambient_light_color_g: (a: number) => number;
+  readonly __wbg_set_outmsg_ambient_light_color_g: (a: number, b: number) => void;
+  readonly __wbg_get_outmsg_ambient_light_color_b: (a: number) => number;
+  readonly __wbg_set_outmsg_ambient_light_color_b: (a: number, b: number) => void;
   readonly __wbindgen_malloc: (a: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number) => number;
   readonly __wbindgen_export_2: WebAssembly.Table;
-  readonly _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__hbd98e57a615e14db: (a: number, b: number, c: number) => void;
+  readonly _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h745a4db96a614b76: (a: number, b: number, c: number) => void;
   readonly _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__hd9cdf56ac7f94909: (a: number, b: number, c: number) => void;
   readonly __wbindgen_add_to_stack_pointer: (a: number) => number;
   readonly __wbindgen_exn_store: (a: number) => void;

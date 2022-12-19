@@ -16,6 +16,11 @@ nalgebra = "0.18.0"
 serde = { version = "1.0", features = ["derive"] }
 serde-wasm-bindgen = "0.4"
 nom = "7.1.1"
+elm_rust = { path = "./elm_rust" }
+
+
+[workspace]
+members = ["elm_rust"]
 
 [dependencies.web-sys]
 version = "0.3.6"
