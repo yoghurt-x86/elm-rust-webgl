@@ -9,6 +9,7 @@ use web_sys::{Response, Request, RequestMode, RequestInit};
 use futures::future::try_join_all;
 use common_funcs as cf;
 use elm_rust::Msg;
+use nalgebra as na;
 
 #[macro_use]
 extern crate lazy_static;
@@ -23,7 +24,7 @@ mod shaders;
 pub struct Client {
     canvas: web_sys::HtmlCanvasElement,
     gl: Rc<RefCell<WebGlRenderingContext>>,
-    program_color_2d: programs::Color2D,
+//    program_color_2d: programs::Color2D,
 //    program_texture: programs::Texture,
     program_mesh: programs::MeshProgram,
     state: app_state::AppState,
@@ -94,10 +95,13 @@ pub async fn load_texture(url: &str) -> Result<HtmlImageElement, JsValue> {
 #[wasm_bindgen]
 impl Client {
     #[wasm_bindgen(constructor)]
-    pub async fn new(element: Element) -> Self {
+    pub async fn new(element: Element, global: JsValue) -> Self {
         let canvas: web_sys::HtmlCanvasElement = element.dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
         let gl_: WebGlRenderingContext = canvas.get_context("webgl").unwrap().unwrap().dyn_into().unwrap();
         let rgl : Rc<RefCell<WebGlRenderingContext>> = Rc::new(RefCell::new(gl_));
+
+        let global : elm_rust::Global = 
+                serde_wasm_bindgen::from_value(global).unwrap();
 
         {
             let gl = rgl.borrow_mut();
@@ -112,6 +116,8 @@ impl Client {
         let assets = mesh.iter().map(|m| format!("./assets/images/{}.png", m.0)).collect::<Vec<String>>();
 
         let depth_map = load_texture("./assets/images/depth_layer_small.png").await.unwrap();
+        let depth_map2 = load_texture("./assets/images/gray.png").await.unwrap();
+        let glow = load_texture("./assets/images/glow.png").await.unwrap();
 
         let textures = try_join_all(assets.iter().map(|m| load_texture(&m))).await.unwrap();
 
@@ -126,7 +132,7 @@ impl Client {
 
         let skybox_textures = try_join_all(skybox_links.iter().map(|src| load_texture(src))).await.unwrap();
 
-        let program_color_2d = programs::Color2D::new(&rgl.borrow());
+        //let program_color_2d = programs::Color2D::new(&rgl.borrow());
         //let program_texture = programs::Texture::new(
         //    &rgl.borrow(), 
         //    tex2,
@@ -136,16 +142,28 @@ impl Client {
             &mesh,
             &textures,
             &skybox_textures,
-            &depth_map,
+            & vec![depth_map, depth_map2],
+            global.gradient1,
+            global.gradient2,
+            &glow,
         );
+
+        let event = web_sys::CustomEvent::new_with_event_init_dict(
+            "rust_event", 
+            &web_sys::CustomEventInit::new().detail(
+                &serde_wasm_bindgen::to_value(&elm_rust::Event::Ready).unwrap(),
+            ),
+        ).unwrap();
+
+        canvas.parent_element().unwrap().dispatch_event(&event).unwrap();
 
         Self {
             canvas: canvas,
-            program_color_2d: program_color_2d,
+            //program_color_2d: program_color_2d,
             //program_texture: program_texture,
             program_mesh: program_mesh,
             gl: rgl,
-            state: app_state::AppState::new(),
+            state: app_state::AppState::from(global),
         }
     }
 
@@ -178,21 +196,16 @@ impl Client {
 
         for msg in messages.iter() {
             let m : Msg = serde_wasm_bindgen::from_value(msg).unwrap();
-            self.state.handle_msg(m, &self.canvas);
+            self.handle_msg(m);
         }
 
         let fps = 1000. / (time - self.state.time);
         self.state.time = time;
-        Ok(app_state::OutMsg { 
-            time: time, 
-            fps: fps, 
-            env_light_color_r: self.state.env_light_color.x, 
-            env_light_color_g: self.state.env_light_color.y,
-            env_light_color_b: self.state.env_light_color.z,
-            ambient_light_color_r: self.state.ambient_light_color.x, 
-            ambient_light_color_g: self.state.ambient_light_color.y,
-            ambient_light_color_b: self.state.ambient_light_color.z,
-        })
+        let out_msg = app_state::OutMsg { 
+                time: time, 
+                fps: fps, 
+            };
+        Ok(out_msg)
     }
 
     pub fn render(&self) {
@@ -204,11 +217,10 @@ impl Client {
 
         let curr_state = self.state;
 
-        self.program_color_2d.render(
-             &gl,
-             &curr_state,
-         );
-
+        //self.program_color_2d.render(
+        //     &gl,
+        //     &curr_state,
+        // );
         //self.program_texture.render(
         //     &gl,
         //     &curr_state,
@@ -217,6 +229,29 @@ impl Client {
              &gl,
              &curr_state,
          );
+    }
+
+    fn handle_msg(&mut self, msg: Msg ) {
+        match msg {
+            Msg::Focus => 
+                self.canvas.request_pointer_lock(),
+            Msg::Unfocus => 
+                web_sys::window().unwrap().document().unwrap().exit_pointer_lock(),
+            Msg::ChangeFOV { angle } => 
+                self.state.camera.fov = angle,
+
+            Msg::ChangeEnvLight { color } => 
+                self.state.env_light_color = na::Vector3::new(color.r, color.g, color.b),
+                
+            Msg::ChangeAmbientLight { color } => 
+                self.state.ambient_light_color = na::Vector3::new(color.r, color.g, color.b),
+
+            Msg::SetSkybox { sky } => 
+                self.state.skybox = sky,
+
+            Msg::SetGradient { color1, color2 } => 
+                self.program_mesh.set_gradient_colors(color1, color2),
+        }
     }
 
 }

@@ -32,8 +32,10 @@ type Msg
     = Focus
     | Unfocus
     | ChangeFov { angle : Float }
-    | ChangeEnvLight { r : Float, g : Float, b : Float }
-    | ChangeAmbientLight { r : Float, g : Float, b : Float }
+    | ChangeEnvLight { color : Color }
+    | ChangeAmbientLight { color : Color }
+    | SetSkybox { sky : Skybox }
+    | SetGradient { color1 : Color, color2 : Color }
 
 
 msgEncoder : Msg -> Json.Encode.Value
@@ -45,20 +47,77 @@ msgEncoder enum =
             Json.Encode.object [ ( "type", Json.Encode.string "Unfocus" ) ]
         ChangeFov { angle } ->
             Json.Encode.object [ ( "type", Json.Encode.string "ChangeFOV" ), ( "angle", Json.Encode.float angle ) ]
-        ChangeEnvLight { r, g, b } ->
-            Json.Encode.object [ ( "type", Json.Encode.string "ChangeEnvLight" ), ( "r", Json.Encode.float r ), ( "g", Json.Encode.float g ), ( "b", Json.Encode.float b ) ]
-        ChangeAmbientLight { r, g, b } ->
-            Json.Encode.object [ ( "type", Json.Encode.string "ChangeAmbientLight" ), ( "r", Json.Encode.float r ), ( "g", Json.Encode.float g ), ( "b", Json.Encode.float b ) ]
+        ChangeEnvLight { color } ->
+            Json.Encode.object [ ( "type", Json.Encode.string "ChangeEnvLight" ), ( "color", colorEncoder color ) ]
+        ChangeAmbientLight { color } ->
+            Json.Encode.object [ ( "type", Json.Encode.string "ChangeAmbientLight" ), ( "color", colorEncoder color ) ]
+        SetSkybox { sky } ->
+            Json.Encode.object [ ( "type", Json.Encode.string "SetSkybox" ), ( "sky", skyboxEncoder sky ) ]
+        SetGradient { color1, color2 } ->
+            Json.Encode.object [ ( "type", Json.Encode.string "SetGradient" ), ( "color1", colorEncoder color1 ), ( "color2", colorEncoder color2 ) ]
+
+type alias Global =
+    { fov : Float
+    , envLightColor : Color
+    , ambientLightColor : Color
+    , gradient1 : Color
+    , gradient2 : Color
+    }
+
+
+globalEncoder : Global -> Json.Encode.Value
+globalEncoder struct =
+    Json.Encode.object
+        [ ( "fov", (Json.Encode.float) struct.fov )
+        , ( "env_light_color", (colorEncoder) struct.envLightColor )
+        , ( "ambient_light_color", (colorEncoder) struct.ambientLightColor )
+        , ( "gradient1", (colorEncoder) struct.gradient1 )
+        , ( "gradient2", (colorEncoder) struct.gradient2 )
+        ]
+
+
+type alias Color =
+    { r : Float
+    , g : Float
+    , b : Float
+    }
+
+
+colorEncoder : Color -> Json.Encode.Value
+colorEncoder struct =
+    Json.Encode.object
+        [ ( "r", (Json.Encode.float) struct.r )
+        , ( "g", (Json.Encode.float) struct.g )
+        , ( "b", (Json.Encode.float) struct.b )
+        ]
+
+
+type Skybox
+    = Gradient
+    | Bitmap
+
+
+skyboxEncoder : Skybox -> Json.Encode.Value
+skyboxEncoder enum =
+    case enum of
+        Gradient ->
+            Json.Encode.object [ ( "type", Json.Encode.string "Gradient" ) ]
+        Bitmap ->
+            Json.Encode.object [ ( "type", Json.Encode.string "Bitmap" ) ]
 
 msgDecoder : Json.Decode.Decoder Msg
 msgDecoder = 
         let
             elmRsConstructChangeFov angle =
                         ChangeFov { angle = angle }
-            elmRsConstructChangeEnvLight r g b =
-                            ChangeEnvLight { r = r, g = g, b = b }
-            elmRsConstructChangeAmbientLight r g b =
-                            ChangeAmbientLight { r = r, g = g, b = b }
+            elmRsConstructChangeEnvLight color =
+                            ChangeEnvLight { color = color }
+            elmRsConstructChangeAmbientLight color =
+                            ChangeAmbientLight { color = color }
+            elmRsConstructSetSkybox sky =
+                            SetSkybox { sky = sky }
+            elmRsConstructSetGradient color1 color2 =
+                            SetGradient { color1 = color1, color2 = color2 }
         in
     Json.Decode.field "type" Json.Decode.string
         |> Json.Decode.andThen
@@ -71,9 +130,61 @@ msgDecoder =
                     "ChangeFOV" ->
                         Json.Decode.succeed elmRsConstructChangeFov |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "angle" (Json.Decode.float)))
                     "ChangeEnvLight" ->
-                        Json.Decode.succeed elmRsConstructChangeEnvLight |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "r" (Json.Decode.float))) |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "g" (Json.Decode.float))) |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "b" (Json.Decode.float)))
+                        Json.Decode.succeed elmRsConstructChangeEnvLight |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "color" (colorDecoder)))
                     "ChangeAmbientLight" ->
-                        Json.Decode.succeed elmRsConstructChangeAmbientLight |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "r" (Json.Decode.float))) |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "g" (Json.Decode.float))) |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "b" (Json.Decode.float)))
+                        Json.Decode.succeed elmRsConstructChangeAmbientLight |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "color" (colorDecoder)))
+                    "SetSkybox" ->
+                        Json.Decode.succeed elmRsConstructSetSkybox |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "sky" (skyboxDecoder)))
+                    "SetGradient" ->
+                        Json.Decode.succeed elmRsConstructSetGradient |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "color1" (colorDecoder))) |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "color2" (colorDecoder)))
+                    unexpected ->
+                        Json.Decode.fail <| "Unexpected variant " ++ unexpected
+            )
+
+globalDecoder : Json.Decode.Decoder Global
+globalDecoder =
+    Json.Decode.succeed Global
+        |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "fov" (Json.Decode.float)))
+        |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "env_light_color" (colorDecoder)))
+        |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "ambient_light_color" (colorDecoder)))
+        |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "gradient1" (colorDecoder)))
+        |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "gradient2" (colorDecoder)))
+
+
+colorDecoder : Json.Decode.Decoder Color
+colorDecoder =
+    Json.Decode.succeed Color
+        |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "r" (Json.Decode.float)))
+        |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "g" (Json.Decode.float)))
+        |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "b" (Json.Decode.float)))
+
+
+type Event
+    = Ready
+
+
+eventDecoder : Json.Decode.Decoder Event
+eventDecoder = 
+    Json.Decode.field "type" Json.Decode.string
+        |> Json.Decode.andThen
+            (\tag ->
+                case tag of
+                    "Ready" ->
+                        Json.Decode.succeed Ready
+                    unexpected ->
+                        Json.Decode.fail <| "Unexpected variant " ++ unexpected
+            )
+
+skyboxDecoder : Json.Decode.Decoder Skybox
+skyboxDecoder = 
+    Json.Decode.field "type" Json.Decode.string
+        |> Json.Decode.andThen
+            (\tag ->
+                case tag of
+                    "Gradient" ->
+                        Json.Decode.succeed Gradient
+                    "Bitmap" ->
+                        Json.Decode.succeed Bitmap
                     unexpected ->
                         Json.Decode.fail <| "Unexpected variant " ++ unexpected
             )

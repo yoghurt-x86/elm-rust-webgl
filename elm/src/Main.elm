@@ -12,7 +12,7 @@ import Json.Decode.Pipeline as D
 import Json.Encode as E
 import Key
 import Material.Icons.Types exposing (..)
-import Rust exposing (Msg(..))
+import Rust exposing (Msg(..), Skybox(..))
 import RustCanvas
 import Tachyons exposing (TachyonsMedia)
 
@@ -57,8 +57,10 @@ type alias Model =
     , tachyonsMedia : TachyonsMedia
     , flashMsg : Maybe String
     , rust_ref : RustCanvas.RustState
+    , rust_global : Rust.Global
     , focused : Bool
     , input_fov : Float
+    , input_skybox : Rust.Skybox
     }
 
 
@@ -68,8 +70,17 @@ flagsDecoder =
         |> D.required "tachyonsMedia" Tachyons.decoder
         |> D.hardcoded Nothing
         |> D.hardcoded RustCanvas.uninitialized
+        |> D.hardcoded
+            (Rust.Global
+                90.0
+                (Rust.Color (221.0 / 255.0) (218.0 / 255.0) (202.0 / 255.0))
+                (Rust.Color (45.0 / 255.0) (107.0 / 255.0) (123 / 255.0))
+                (Rust.Color (181.0 / 255.0) (131.0 / 255.0) (90.0 / 255.0))
+                (Rust.Color (205.0 / 255.0) (171.0 / 255.0) (143.0 / 255.0))
+            )
         |> D.hardcoded False
         |> D.hardcoded 90.0
+        |> D.hardcoded Rust.Gradient
 
 
 init : E.Value -> ( Result D.Error Model, Cmd Msg )
@@ -95,12 +106,15 @@ init value =
 type Msg
     = GotTachyonsMedia TachyonsMedia
     | SetFlash (Maybe String)
-    | GotRustRef RustCanvas.RustState
+    | RustMsg RustCanvas.Msg
     | KeyDown Key.Key
     | KeyUp Key.Key
     | InputFov Float
     | InputAmbientColor ( Float, Float, Float )
     | InputEnvColor ( Float, Float, Float )
+    | InputSkybox Rust.Skybox
+    | InputGradient1Color ( Float, Float, Float )
+    | InputGradient2Color ( Float, Float, Float )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -116,10 +130,18 @@ update msg model =
             , Cmd.none
             )
 
-        GotRustRef value ->
-            ( { model | rust_ref = value }
-            , Cmd.none
-            )
+        RustMsg rmsg ->
+            case rmsg of
+                RustCanvas.State value ->
+                    ( { model | rust_ref = value }
+                    , Cmd.none
+                    )
+
+                --The canvas is ready
+                RustCanvas.Event Rust.Ready ->
+                    ( model
+                    , Cmd.none
+                    )
 
         KeyDown key ->
             case key of
@@ -153,15 +175,61 @@ update msg model =
             )
 
         InputEnvColor ( r, g, b ) ->
-            ( model
+            let
+                color =
+                    Rust.Color r g b
+
+                global =
+                    model.rust_global
+            in
+            ( { model | rust_global = { global | envLightColor = color } }
             , RustCanvas.sendRustMsg model.rust_ref <|
-                ChangeEnvLight { r = r, g = g, b = b }
+                ChangeEnvLight { color = color }
             )
 
         InputAmbientColor ( r, g, b ) ->
-            ( model
+            let
+                color =
+                    Rust.Color r g b
+
+                global =
+                    model.rust_global
+            in
+            ( { model | rust_global = { global | ambientLightColor = color } }
             , RustCanvas.sendRustMsg model.rust_ref <|
-                ChangeAmbientLight { r = r, g = g, b = b }
+                ChangeAmbientLight { color = color }
+            )
+
+        InputSkybox skybox ->
+            ( { model | input_skybox = skybox }
+            , RustCanvas.sendRustMsg model.rust_ref <|
+                SetSkybox { sky = skybox }
+            )
+
+        InputGradient1Color ( r, g, b ) ->
+            let
+                color =
+                    Rust.Color r g b
+
+                global =
+                    model.rust_global
+            in
+            ( { model | rust_global = { global | gradient1 = color } }
+            , RustCanvas.sendRustMsg model.rust_ref <|
+                SetGradient { color1 = color, color2 = model.rust_global.gradient2 }
+            )
+
+        InputGradient2Color ( r, g, b ) ->
+            let
+                color =
+                    Rust.Color r g b
+
+                global =
+                    model.rust_global
+            in
+            ( { model | rust_global = { global | gradient2 = color } }
+            , RustCanvas.sendRustMsg model.rust_ref <|
+                SetGradient { color1 = model.rust_global.gradient1, color2 = color }
             )
 
 
@@ -241,36 +309,50 @@ view model =
         toHex f32 =
             Hex.toString (Basics.round (f32 * 255))
 
-        field name =
-            D.map ((String.padLeft 2 '0') << toHex) <| D.field name D.float
+        field =
+            String.padLeft 2 '0' << toHex
 
         env_colors =
-            RustCanvas.decodeValue
-                model.rust_ref
-                (D.map3 (\r g b -> "#" ++ r ++ g ++ b)
-                    (field "env_light_color_r")
-                    (field "env_light_color_g")
-                    (field "env_light_color_b")
-                )
-                |> Result.withDefault "#000000"
+            "#"
+                ++ field model.rust_global.envLightColor.r
+                ++ field model.rust_global.envLightColor.g
+                ++ field model.rust_global.envLightColor.b
 
         ambient_colors =
-            RustCanvas.decodeValue
-                model.rust_ref
-                (D.map3 (\r g b -> "#" ++ r ++ g ++ b)
-                    (field "ambient_light_color_r")
-                    (field "ambient_light_color_g")
-                    (field "ambient_light_color_b")
-                )
-                |> Result.withDefault "#000000"
+            "#"
+                ++ field model.rust_global.ambientLightColor.r
+                ++ field model.rust_global.ambientLightColor.g
+                ++ field model.rust_global.ambientLightColor.b
+
+        gradient1 =
+            "#"
+                ++ field model.rust_global.gradient1.r
+                ++ field model.rust_global.gradient1.g
+                ++ field model.rust_global.gradient1.b
+
+        gradient2 =
+            "#"
+                ++ field model.rust_global.gradient2.r
+                ++ field model.rust_global.gradient2.g
+                ++ field model.rust_global.gradient2.b
     in
     section
         [ attribute "style" "--pos:relative" ]
         [ div
-            [ attribute "style" "--inset-top-left:10px; --pos:absolute;" ]
+            [ attribute "style"
+                "--inset-top-left:10px; --pos:absolute;"
+            ]
             [ h3 [] [ text (String.fromInt <| Basics.round time) ] ]
         , div
-            [ attribute "style" "--inset-top-right:10px; --pos:absolute;" ]
+            [ attribute "style"
+                """
+                --inset-top-right:10px;
+                --pos:absolute;
+                --bg:#00000066;
+                --py:24px;
+                --px:10px;
+                """
+            ]
             [ label [ for "input-fov" ]
                 [ text <| "Fov: " ++ String.fromFloat model.input_fov
                 , input
@@ -316,7 +398,60 @@ view model =
                     []
                     |> Html.map InputAmbientColor
                 ]
+            , label [ for "input-skyobx" ]
+                [ text <| "Choose Skybox: "
+                , select
+                    [ name "type"
+                    , stopPropagationOn
+                        "input"
+                        (D.map (\x -> ( x, True ))
+                            (targetValue
+                                |> D.andThen
+                                    (\str ->
+                                        case str of
+                                            "Gradient" ->
+                                                D.succeed Rust.Gradient
+
+                                            "Bitmap" ->
+                                                D.succeed Rust.Bitmap
+
+                                            _ ->
+                                                D.fail "Unknown value"
+                                    )
+                            )
+                        )
+                    ]
+                    [ option [ value "Gradient" ] [ text "Gradient" ]
+                    , option [ value "Bitmap" ] [ text "Bitmap" ]
+                    ]
+                    |> Html.map InputSkybox
+                ]
+            , case model.input_skybox of
+                Gradient ->
+                    div []
+                        [ label [ for "input-gradient1-color" ]
+                            [ text <| "Gradient1 color: "
+                            , colorInput
+                                [ id "input-gradient1-color"
+                                , value gradient1
+                                ]
+                                []
+                                |> Html.map InputGradient1Color
+                            ]
+                        , label [ for "input-gradient2-color" ]
+                            [ text <| "Gradient2 color: "
+                            , colorInput
+                                [ id "input-gradient2-color"
+                                , value gradient2
+                                ]
+                                []
+                                |> Html.map InputGradient2Color
+                            ]
+                        ]
+
+                _ ->
+                    text ""
             ]
-        , RustCanvas.view
-            |> Html.map GotRustRef
+        , RustCanvas.view model.rust_global
+            |> Html.map RustMsg
         ]

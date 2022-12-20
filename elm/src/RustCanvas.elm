@@ -1,9 +1,6 @@
-port module RustCanvas exposing (sendRustMsg, view, decodeValue, RustState, uninitialized)
-import Rust
-
+port module RustCanvas exposing (Msg(..), RustState, decodeValue, sendRustMsg, uninitialized, view)
 
 import Browser
-import Rust exposing (Msg(..))
 import Color
 import Date
 import Dict exposing (Dict)
@@ -18,54 +15,66 @@ import List.Extra as List
 import Material.Icons
 import Material.Icons.Outlined
 import Material.Icons.Types exposing (..)
+import Rust exposing (Msg(..))
 import Tachyons exposing (TachyonsMedia)
 import Time
 
-type RustState 
+
+type RustState
     = RustState E.Value
 
-uninitialized : RustState  
-uninitialized = 
+
+type Msg
+    = State RustState
+    | Event Rust.Event
+
+
+uninitialized : RustState
+uninitialized =
     RustState E.null
 
 
-sendRustMsg : RustState -> Msg -> Cmd msg
+sendRustMsg : RustState -> Rust.Msg -> Cmd msg
 sendRustMsg (RustState value) msg =
-    let obj = 
+    let
+        obj =
             E.object <|
-                [ ("rust_canvas", value)
-                , ("msg"
+                [ ( "rust_canvas", value )
+                , ( "msg"
                   , Rust.msgEncoder msg
                   )
                 ]
-    in 
+    in
     rustEvent obj
 
 
-type alias RustMessage = 
-    { fps: Int }
-
-
-view : Html RustState
-view =
-    node "rust-canvas" 
+view : Rust.Global -> Html Msg
+view global =
+    node "rust-canvas"
         [ on "rust_state" <|
-            D.map  RustState <|
-                D.field "target"  <|
+            D.map (RustState >> State) <|
+                D.field "target" <|
                     D.value
+        , on "rust_event" <|
+            (D.map Event <|
+                (D.field "detail" <|
+                    Rust.eventDecoder
+                )
+            )
+        , property "global"
+            (Rust.globalEncoder global)
         , style "display" "block"
-        ] 
+        ]
         []
 
 
-decodeValue : RustState -> D.Decoder a -> Result D.Error a 
-decodeValue (RustState value) decoder = 
-    D.decodeValue 
-        ( D.at [ "_canvas", "rust_state" ] <|
+decodeValue : RustState -> D.Decoder a -> Result D.Error a
+decodeValue (RustState value) decoder =
+    D.decodeValue
+        (D.at [ "_canvas", "rust_state" ] <|
             decoder
         )
         value
-
 
 
 port rustEvent : E.Value -> Cmd msg

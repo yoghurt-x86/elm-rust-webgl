@@ -12,6 +12,8 @@ use nalgebra as na;
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct MeshProgram {
+    glow: WebGlProgram,
+    gradient: WebGlProgram,
     skybox: WebGlProgram,
     program: WebGlProgram,
     u_perspective: WebGlUniformLocation,
@@ -19,18 +21,28 @@ pub struct MeshProgram {
     u_light_direction: WebGlUniformLocation,
     u_ambient_light: WebGlUniformLocation,
     u_env_light: WebGlUniformLocation,
+    glow_u_env_light: WebGlUniformLocation,
     u_texture1: WebGlUniformLocation,
     u_texture2: WebGlUniformLocation,
+    u_sprite_texture: WebGlUniformLocation,
+    u_gradient1: WebGlUniformLocation,
+    u_gradient2: WebGlUniformLocation,
     a_position: i32,
+    a_sprite_position: i32,
+    glow_buffer: WebGlBuffer,
+    glow_texture_buffer: WebGlTexture,
     a_normal: i32,
     a_texcoord: i32,
     buffers: Vec<MeshBuffer>,
-    depth_texture_buffer: WebGlTexture,
     skybox_a_position: i32,
     skybox_u_skybox: WebGlUniformLocation,
     skybox_texture: WebGlTexture,
     skybox_buffer: WebGlBuffer,
     skybox_u_view_direction_projection_inverse: WebGlUniformLocation,
+    gradient_a_position: i32,
+    gradient_u_view_direction_projection_inverse: WebGlUniformLocation,
+    gradient_color1: elm_rust::Color,
+    gradient_color2: elm_rust::Color,
 }
 
 #[derive(Debug)]
@@ -43,17 +55,57 @@ pub struct MeshBuffer {
     uv_buffer: WebGlBuffer,
     uv_size: usize,
     texture_buffer: WebGlTexture,
+    depth_texture_buffer: WebGlTexture,
 }
 
 
 impl MeshProgram {
+
+    pub fn set_gradient_colors(&mut self, color1: elm_rust::Color, color2: elm_rust::Color) {
+        self.gradient_color1 = color1;
+        self.gradient_color2 = color2;
+    }
+
     pub fn new(
         gl: &WebGlRenderingContext, 
         meshes: &Vec<(String,Mesh)>, 
         textures: &Vec<HtmlImageElement>, 
         skybox: &Vec<HtmlImageElement>,
-        depth_texture: &HtmlImageElement, 
+        depth_textures: &Vec<HtmlImageElement>,
+        gradient_color1: elm_rust::Color,
+        gradient_color2: elm_rust::Color,
+        glow: &HtmlImageElement,
         ) -> Self {
+        let glow_program = cf::link_program(
+            &gl,
+            super::super::shaders::vertex::sprite::SHADER,
+            super::super::shaders::fragment::sprite::SHADER,
+        ).unwrap();
+
+        let glow_a_sprite_position = gl.get_attrib_location(&glow_program, "a_sprite_position");
+        let glow_buffer = gl.create_buffer().ok_or("failed to create buffer").unwrap();
+
+
+        let glow_texture_buffer = gl.create_texture().unwrap();
+        gl.bind_texture(GL::TEXTURE_2D, Some(&glow_texture_buffer));
+        gl.tex_image_2d_with_u32_and_u32_and_image(
+            GL::TEXTURE_2D, //target 
+            0,
+            GL::RGBA as i32,  //inernalFormat
+            GL::RGBA,  
+            GL::UNSIGNED_BYTE,
+            &glow,
+        ).unwrap();
+        gl.generate_mipmap(GL::TEXTURE_2D);
+        let u_sprite_texture = gl.get_uniform_location(&glow_program, "u_sprite_texture").unwrap();
+        let glow_u_env_light = gl.get_uniform_location(&glow_program, "u_env_light").unwrap();
+
+        let gradient_program = cf::link_program(
+            &gl,
+            super::super::shaders::vertex::skybox::SHADER,
+            super::super::shaders::fragment::gradient::SHADER,
+        ).unwrap();
+
         let skybox_program = cf::link_program(
             &gl,
             super::super::shaders::vertex::skybox::SHADER,
@@ -140,6 +192,14 @@ impl MeshProgram {
         let skybox_u_view_direction_projection_inverse = gl.get_uniform_location(&skybox_program, "u_view_direction_projection_inverse").unwrap();
 
 
+        let gradient_a_position = gl.get_attrib_location(&gradient_program, "a_position");
+        let gradient_u_view_direction_projection_inverse = gl.get_uniform_location(&gradient_program, "u_view_direction_projection_inverse").unwrap();
+
+
+        let u_gradient1 = gl.get_uniform_location(&gradient_program, "u_gradient1").unwrap();
+        let u_gradient2 = gl.get_uniform_location(&gradient_program, "u_gradient2").unwrap();
+
+
         let program = cf::link_program(
             &gl,
             super::super::shaders::vertex::mesh::SHADER,
@@ -147,21 +207,10 @@ impl MeshProgram {
         ).unwrap();
 
 
-        let depth_texture_buffer = gl.create_texture().unwrap();
-        gl.bind_texture(GL::TEXTURE_2D, Some(&depth_texture_buffer));
-        gl.tex_image_2d_with_u32_and_u32_and_image(
-            GL::TEXTURE_2D, //target 
-            0,
-            GL::RGBA as i32,  //inernalFormat
-            GL::RGBA,  
-            GL::UNSIGNED_BYTE,
-            &depth_texture,
-        ).unwrap();
-        gl.generate_mipmap(GL::TEXTURE_2D);
 
 
         let mut buffers = Vec::<MeshBuffer>::new();
-        for (i ,(_name, mesh)) in meshes.iter().enumerate() {
+        for (i ,((_name, mesh), depth_texture)) in std::iter::zip(meshes.iter(), depth_textures.iter()).enumerate() {
             let memory_buffer = wasm_bindgen::memory()
                 .dyn_into::<WebAssembly::Memory>()
                 .unwrap()
@@ -221,6 +270,18 @@ impl MeshProgram {
             ).unwrap();
             gl.generate_mipmap(GL::TEXTURE_2D);
 
+            let depth_texture_buffer = gl.create_texture().unwrap();
+            gl.bind_texture(GL::TEXTURE_2D, Some(&depth_texture_buffer));
+            gl.tex_image_2d_with_u32_and_u32_and_image(
+                GL::TEXTURE_2D, //target 
+                0,
+                GL::RGBA as i32,  //inernalFormat
+                GL::RGBA,  
+                GL::UNSIGNED_BYTE,
+                &depth_texture,
+            ).unwrap();
+            gl.generate_mipmap(GL::TEXTURE_2D);
+
 
             buffers.push(
                 MeshBuffer{
@@ -231,6 +292,7 @@ impl MeshProgram {
                     uv_buffer: uv_buffer,
                     uv_size: mesh.uv.len(),
                     texture_buffer: texture_buffer,
+                    depth_texture_buffer: depth_texture_buffer,
                 }
             );
         }
@@ -244,6 +306,7 @@ impl MeshProgram {
             a_position: gl.get_attrib_location(&program, "a_position"),
             a_normal: gl.get_attrib_location(&program, "a_normal"),
             a_texcoord: gl.get_attrib_location(&program, "a_texcoord"),
+            a_sprite_position: glow_a_sprite_position,
             u_perspective: gl.get_uniform_location(&program, "u_perspective").unwrap(),
             u_view: gl.get_uniform_location(&program, "u_view").unwrap(),
             u_light_direction: gl.get_uniform_location(&program, "u_reverse_light").unwrap(),
@@ -251,12 +314,23 @@ impl MeshProgram {
             u_env_light: gl.get_uniform_location(&program, "u_env_light").unwrap(),
             u_texture1: gl.get_uniform_location(&program, "u_texture1").unwrap(),
             u_texture2: gl.get_uniform_location(&program, "u_texture2").unwrap(),
+            u_sprite_texture: u_sprite_texture,
+            glow_u_env_light: glow_u_env_light,
+            u_gradient1: u_gradient1,
+            u_gradient2: u_gradient2,
 
-            depth_texture_buffer: depth_texture_buffer,
 
             buffers: buffers,
             program: program,
+            gradient: gradient_program,
             skybox: skybox_program,
+            glow: glow_program,
+            glow_buffer: glow_buffer, 
+            glow_texture_buffer: glow_texture_buffer, 
+            gradient_a_position:gradient_a_position,
+            gradient_u_view_direction_projection_inverse: gradient_u_view_direction_projection_inverse,
+            gradient_color1: gradient_color1,
+            gradient_color2: gradient_color2,
         }
     }
 
@@ -293,8 +367,6 @@ impl MeshProgram {
         let light_dir = na::Vector3::new(-0.4, 0.6, 0.6);
         let light_dir_eye_coord = view_inverse.transform_vector(&light_dir).normalize();
         let light_dir_perspective = perspective.as_matrix().transform_point(&na::Point3::from_coordinates(light_dir_eye_coord)); 
-
-        //cf::log(&format!("{:?}", light_dir_perspective));
 
         gl.uniform3f(
             Some(&self.u_light_direction),
@@ -334,7 +406,7 @@ impl MeshProgram {
             gl.bind_texture(GL::TEXTURE_2D, Some(&buffer.texture_buffer));
 
             gl.active_texture(GL::TEXTURE1);
-            gl.bind_texture(GL::TEXTURE_2D, Some(&self.depth_texture_buffer));
+            gl.bind_texture(GL::TEXTURE_2D, Some(&buffer.depth_texture_buffer));
 
 
             //transform
@@ -344,21 +416,89 @@ impl MeshProgram {
             gl.draw_arrays(GL::TRIANGLES, 0, (buffer.positions_size / 3) as i32);
         }
 
-        gl.use_program(Some(&self.skybox));
-        gl.depth_func(GL::LEQUAL);
+        match app.skybox {
+            elm_rust::Skybox::Bitmap => {
+                gl.use_program(Some(&self.skybox));
+                gl.depth_func(GL::LEQUAL);
 
-        // positions
-        gl.enable_vertex_attrib_array(self.skybox_a_position as u32);
-        gl.bind_buffer(GL::ARRAY_BUFFER, Some(&self.skybox_buffer));
-        gl.vertex_attrib_pointer_with_i32(self.skybox_a_position as u32, 2, GL::FLOAT, false, 0, 0);
+                // positions
+                gl.enable_vertex_attrib_array(self.skybox_a_position as u32);
+                gl.bind_buffer(GL::ARRAY_BUFFER, Some(&self.skybox_buffer));
+                gl.vertex_attrib_pointer_with_i32(self.skybox_a_position as u32, 2, GL::FLOAT, false, 0, 0);
 
-        // texture
-        gl.active_texture(GL::TEXTURE0);
-        gl.bind_texture(GL::TEXTURE_CUBE_MAP, Some(&self.skybox_texture));
-        gl.uniform1i(Some(&self.skybox_u_skybox), 0);
+                // texture
+                gl.active_texture(GL::TEXTURE0);
+                gl.bind_texture(GL::TEXTURE_CUBE_MAP, Some(&self.skybox_texture));
+                gl.uniform1i(Some(&self.skybox_u_skybox), 0);
 
-        gl.uniform_matrix4fv_with_f32_array(Some(&self.skybox_u_view_direction_projection_inverse), false, view_direction_inverse.as_slice());
+                gl.uniform_matrix4fv_with_f32_array(Some(&self.skybox_u_view_direction_projection_inverse), false, view_direction_inverse.as_slice());
 
-        gl.draw_arrays(GL::TRIANGLES, 0, 6 as i32);
+                gl.draw_arrays(GL::TRIANGLES, 0, 6 as i32);
+            },
+            elm_rust::Skybox::Gradient => {
+                gl.use_program(Some(&self.gradient));
+                gl.depth_func(GL::LEQUAL);
+
+                gl.uniform3f(
+                    Some(&self.u_gradient1),
+                    self.gradient_color1.r,
+                    self.gradient_color1.g,
+                    self.gradient_color1.b,
+                );
+                gl.uniform3f(
+                    Some(&self.u_gradient2),
+                    self.gradient_color2.r,
+                    self.gradient_color2.g,
+                    self.gradient_color2.b,
+                );
+
+                // positions
+                gl.enable_vertex_attrib_array(self.gradient_a_position as u32);
+                gl.bind_buffer(GL::ARRAY_BUFFER, Some(&self.skybox_buffer));
+                gl.vertex_attrib_pointer_with_i32(self.gradient_a_position as u32, 2, GL::FLOAT, false, 0, 0);
+
+                gl.uniform_matrix4fv_with_f32_array(Some(&self.gradient_u_view_direction_projection_inverse), false, view_direction_inverse.as_slice());
+
+                gl.draw_arrays(GL::TRIANGLES, 0, 6 as i32);
+            },
+        }
+
+        /// Gloow
+        
+        if light_dir_perspective.z <= 0.0 {
+            gl.use_program(Some(&self.glow));
+            gl.depth_func(GL::LEQUAL);
+
+            // positions
+            gl.enable_vertex_attrib_array(self.a_sprite_position as u32);
+            gl.bind_buffer(GL::ARRAY_BUFFER, Some(&self.glow_buffer));
+            gl.vertex_attrib_pointer_with_i32(self.a_sprite_position as u32, 2, GL::FLOAT, false, 0, 0);
+
+            let sprite_position : [f32; 2] = [light_dir_perspective.x, light_dir_perspective.y];
+
+            let sprite_memory = wasm_bindgen::memory()
+                .dyn_into::<WebAssembly::Memory>()
+                .unwrap()
+                .buffer();
+            let sprite_location = sprite_position.as_ptr() as u32 / 4;
+            let sprite_array = js_sys::Float32Array::new(&sprite_memory).subarray(
+                sprite_location,
+                sprite_location + sprite_position.len() as u32,
+            );
+            gl.buffer_data_with_array_buffer_view(GL::ARRAY_BUFFER, &sprite_array, GL::DYNAMIC_DRAW);
+
+            gl.active_texture(GL::TEXTURE0);
+            gl.bind_texture(GL::TEXTURE_2D, Some(&self.glow_texture_buffer));
+            gl.uniform1i(Some(&self.u_sprite_texture), 0);
+
+            gl.uniform3f(
+                Some(&self.glow_u_env_light),
+                app.env_light_color.x,
+                app.env_light_color.y,
+                app.env_light_color.z,
+            );
+
+            gl.draw_arrays(GL::POINTS, 0, 1);
+        }
     }
 }

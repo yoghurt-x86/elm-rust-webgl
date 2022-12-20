@@ -45,4 +45,6 @@ features = [
     'Response',
     'Url',
     'Blob',
+    'CustomEvent',
+    'CustomEventInit',
 ]

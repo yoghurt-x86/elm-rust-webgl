@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use core::cmp::max;
 use nalgebra as na;
-use elm_rust::Msg;
+use elm_rust::{Msg, Color};
 use crate::Client;
 
 use super::Movement;
@@ -30,43 +30,21 @@ pub struct AppState {
     pub camera : Camera,
     pub env_light_color: na::Vector3<f32>,
     pub ambient_light_color: na::Vector3<f32>,
+    pub skybox: elm_rust::Skybox,
 }
-
-
-#[derive(Clone, Copy)]
-#[wasm_bindgen]
-pub struct Color {
-    r: f32,
-    g: f32,
-    b: f32,
-}
-
-impl Color {
-    pub fn from(vector: na::Vector3<f32>) -> Self {
-        Self {
-            r: vector.x,
-            g: vector.y,
-            b: vector.z,
-        }
-    }
-
-}
-
 
 #[wasm_bindgen]
 pub struct OutMsg {
     pub time: f32,
     pub fps: f32,
-    pub env_light_color_r: f32,
-    pub env_light_color_g: f32,
-    pub env_light_color_b: f32,
-    pub ambient_light_color_r: f32,
-    pub ambient_light_color_g: f32,
-    pub ambient_light_color_b: f32,
 }
 
 impl Camera {
     fn new() -> Self {
+        Camera::from(90.0)
+    }
+
+    fn from(fov: f32) -> Self {
         let default = na::Vector3::new(1., 0., 0.);
         let angles = na::Vector3::new(
             0., 
@@ -79,7 +57,7 @@ impl Camera {
             position: na::Point3::new(-16., -18., 62.),
             direction: what,
             euler_angles: angles,
-            fov: 90.0,
+            fov: fov,
         }
     }
 }
@@ -97,6 +75,31 @@ impl AppState {
             camera: Camera::new(),
             ambient_light_color: na::Vector3::new(0.3, 0.3, 0.4),
             env_light_color: na::Vector3::new(1.0, 1.0, 0.8),
+            skybox: elm_rust::Skybox::Bitmap,
+        }
+    }
+
+    pub fn from(global: elm_rust::Global) -> Self {
+        Self {
+            canvas_height: 0., 
+            canvas_width: 0.,
+            control_bottom: 0.,
+            control_top: 0.,
+            control_left: 0.,
+            control_right: 0.,
+            time: 0.,
+            camera: Camera::from(global.fov),
+            ambient_light_color: na::Vector3::new(
+                global.ambient_light_color.r, 
+                global.ambient_light_color.g, 
+                global.ambient_light_color.b,
+            ),
+            env_light_color: na::Vector3::new(
+                global.env_light_color.r, 
+                global.env_light_color.g, 
+                global.env_light_color.b,
+            ),
+            skybox: elm_rust::Skybox::Gradient,
         }
     }
 
@@ -164,21 +167,6 @@ impl AppState {
             self.camera.position = pos;
             self.camera.direction = dir;
             self.camera.euler_angles.z += 0.001;
-        }
-    }
-
-    pub fn handle_msg(&mut self, msg: Msg, canvas: &HtmlCanvasElement) {
-        match msg {
-            Msg::Focus => 
-                canvas.request_pointer_lock(),
-            Msg::Unfocus => 
-                web_sys::window().unwrap().document().unwrap().exit_pointer_lock(),
-            Msg::ChangeFOV { angle } => 
-                self.camera.fov = angle,
-            Msg::ChangeEnvLight { r, g, b } => 
-                self.env_light_color = na::Vector3::new(r, g,b),
-            Msg::ChangeAmbientLight { r, g, b } => 
-                self.ambient_light_color = na::Vector3::new(r, g,b),
         }
     }
 }

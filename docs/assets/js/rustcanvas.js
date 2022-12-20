@@ -42,13 +42,15 @@ export class RustCanvas extends HTMLElement{
         const canvas = this._canvas;
         this.appendChild(canvas);
 
+        const global = this.global;
+
         const gl = canvas.getContext("webgl", { antialias: true });
         if (!gl) {
             alert('Failed to initialize WebGL');
             return;
         }
 
-        const client_promise = (new Client(canvas));
+        const client_promise = (new Client(canvas, global));
 
         client_promise.then( (client) => {
             canvas.client = client;
