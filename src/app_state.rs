@@ -131,8 +131,8 @@ impl AppState {
             let default = na::Vector3::new(1., 0., 0.);
             let angles = na::Vector3::new(
                 0., 
-                self.camera.euler_angles.y + (mouse_movement.y * 0.001), 
-                self.camera.euler_angles.z + (mouse_movement.x * -0.001)
+                (self.camera.euler_angles.y + (mouse_movement.y * 0.001)).min(89.99 * std::f32::consts::PI / 180.0).max(-89.99 * std::f32::consts::PI / 180.0),
+                self.camera.euler_angles.z + (mouse_movement.x * -0.001),
                 );
             let camera_rotation = na::Rotation3::from_euler_angles(angles.x, angles.y, angles.z).to_homogeneous();
             let new_dir : na::Vector3<f32> = camera_rotation.transform_vector(&default);

@@ -345,6 +345,11 @@ view model =
             [ h3 [] [ text (String.fromInt <| Basics.round time) ] ]
         , div
             [ attribute "style"
+                "--inset-bottom-left:10px; --pos:absolute;"
+            ]
+            [ h3 [] [ text "Press 'Z' to control the camera."]]
+        , div
+            [ attribute "style"
                 """
                 --inset-top-right:10px;
                 --pos:absolute;

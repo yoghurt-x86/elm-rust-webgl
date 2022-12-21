@@ -6,12 +6,12 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 
+
 [dependencies]
 wasm-bindgen = "0.2.83"
 wasm-bindgen-futures = "0.4.33"
 js-sys = "0.3.60"
 futures = "0.3"
-lazy_static = "1.3.0"
 nalgebra = "0.18.0"
 serde = { version = "1.0", features = ["derive"] }
 serde-wasm-bindgen = "0.4"
@@ -43,8 +43,9 @@ features = [
     'RequestInit',
     'RequestMode',
     'Response',
-    'Url',
-    'Blob',
     'CustomEvent',
     'CustomEventInit',
 ]
+
+[profile.release]
+lto = true

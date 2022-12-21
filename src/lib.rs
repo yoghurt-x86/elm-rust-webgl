@@ -11,9 +11,6 @@ use common_funcs as cf;
 use elm_rust::Msg;
 use nalgebra as na;
 
-#[macro_use]
-extern crate lazy_static;
-
 mod app_state;
 mod programs;
 mod common_funcs;
