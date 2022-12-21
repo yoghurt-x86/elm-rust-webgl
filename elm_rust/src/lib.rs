@@ -5,14 +5,12 @@ use nalgebra as na;
 
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, Elm, ElmEncode, ElmDecode)]
-#[serde(tag = "type")]
 pub enum Skybox {
     Gradient,
     Bitmap,
 }
 
 #[derive(Debug, Serialize, Deserialize, Elm, ElmEncode, ElmDecode)]
-#[serde(tag = "type")]
 pub enum Msg {
     Focus,
     Unfocus,
@@ -57,7 +55,6 @@ pub struct Global {
 
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Elm, ElmEncode, ElmDecode)]
-#[serde(tag = "type")]
 pub enum Event {
     Ready
 }

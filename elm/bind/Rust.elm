@@ -42,19 +42,19 @@ msgEncoder : Msg -> Json.Encode.Value
 msgEncoder enum =
     case enum of
         Focus ->
-            Json.Encode.object [ ( "type", Json.Encode.string "Focus" ) ]
+            Json.Encode.string "Focus"
         Unfocus ->
-            Json.Encode.object [ ( "type", Json.Encode.string "Unfocus" ) ]
+            Json.Encode.string "Unfocus"
         ChangeFov { angle } ->
-            Json.Encode.object [ ( "type", Json.Encode.string "ChangeFOV" ), ( "angle", Json.Encode.float angle ) ]
+            Json.Encode.object [ ( "ChangeFOV", Json.Encode.object [ ( "angle", Json.Encode.float angle ) ] ) ]
         ChangeEnvLight { color } ->
-            Json.Encode.object [ ( "type", Json.Encode.string "ChangeEnvLight" ), ( "color", colorEncoder color ) ]
+            Json.Encode.object [ ( "ChangeEnvLight", Json.Encode.object [ ( "color", colorEncoder color ) ] ) ]
         ChangeAmbientLight { color } ->
-            Json.Encode.object [ ( "type", Json.Encode.string "ChangeAmbientLight" ), ( "color", colorEncoder color ) ]
+            Json.Encode.object [ ( "ChangeAmbientLight", Json.Encode.object [ ( "color", colorEncoder color ) ] ) ]
         SetSkybox { sky } ->
-            Json.Encode.object [ ( "type", Json.Encode.string "SetSkybox" ), ( "sky", skyboxEncoder sky ) ]
+            Json.Encode.object [ ( "SetSkybox", Json.Encode.object [ ( "sky", skyboxEncoder sky ) ] ) ]
         SetGradient { color1, color2 } ->
-            Json.Encode.object [ ( "type", Json.Encode.string "SetGradient" ), ( "color1", colorEncoder color1 ), ( "color2", colorEncoder color2 ) ]
+            Json.Encode.object [ ( "SetGradient", Json.Encode.object [ ( "color1", colorEncoder color1 ), ( "color2", colorEncoder color2 ) ] ) ]
 
 type alias Global =
     { fov : Float
@@ -101,9 +101,9 @@ skyboxEncoder : Skybox -> Json.Encode.Value
 skyboxEncoder enum =
     case enum of
         Gradient ->
-            Json.Encode.object [ ( "type", Json.Encode.string "Gradient" ) ]
+            Json.Encode.string "Gradient"
         Bitmap ->
-            Json.Encode.object [ ( "type", Json.Encode.string "Bitmap" ) ]
+            Json.Encode.string "Bitmap"
 
 msgDecoder : Json.Decode.Decoder Msg
 msgDecoder = 
@@ -111,35 +111,39 @@ msgDecoder =
             elmRsConstructChangeFov angle =
                         ChangeFov { angle = angle }
             elmRsConstructChangeEnvLight color =
-                            ChangeEnvLight { color = color }
+                        ChangeEnvLight { color = color }
             elmRsConstructChangeAmbientLight color =
-                            ChangeAmbientLight { color = color }
+                        ChangeAmbientLight { color = color }
             elmRsConstructSetSkybox sky =
-                            SetSkybox { sky = sky }
+                        SetSkybox { sky = sky }
             elmRsConstructSetGradient color1 color2 =
-                            SetGradient { color1 = color1, color2 = color2 }
+                        SetGradient { color1 = color1, color2 = color2 }
         in
-    Json.Decode.field "type" Json.Decode.string
-        |> Json.Decode.andThen
-            (\tag ->
-                case tag of
-                    "Focus" ->
-                        Json.Decode.succeed Focus
-                    "Unfocus" ->
-                        Json.Decode.succeed Unfocus
-                    "ChangeFOV" ->
-                        Json.Decode.succeed elmRsConstructChangeFov |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "angle" (Json.Decode.float)))
-                    "ChangeEnvLight" ->
-                        Json.Decode.succeed elmRsConstructChangeEnvLight |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "color" (colorDecoder)))
-                    "ChangeAmbientLight" ->
-                        Json.Decode.succeed elmRsConstructChangeAmbientLight |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "color" (colorDecoder)))
-                    "SetSkybox" ->
-                        Json.Decode.succeed elmRsConstructSetSkybox |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "sky" (skyboxDecoder)))
-                    "SetGradient" ->
-                        Json.Decode.succeed elmRsConstructSetGradient |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "color1" (colorDecoder))) |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "color2" (colorDecoder)))
-                    unexpected ->
-                        Json.Decode.fail <| "Unexpected variant " ++ unexpected
-            )
+    Json.Decode.oneOf
+        [ Json.Decode.string
+            |> Json.Decode.andThen
+                (\x ->
+                    case x of
+                        "Focus" ->
+                            Json.Decode.succeed Focus
+                        unexpected ->
+                            Json.Decode.fail <| "Unexpected variant " ++ unexpected
+                )
+        , Json.Decode.string
+            |> Json.Decode.andThen
+                (\x ->
+                    case x of
+                        "Unfocus" ->
+                            Json.Decode.succeed Unfocus
+                        unexpected ->
+                            Json.Decode.fail <| "Unexpected variant " ++ unexpected
+                )
+        , Json.Decode.field "ChangeFOV" (Json.Decode.succeed elmRsConstructChangeFov |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "angle" (Json.Decode.float))))
+        , Json.Decode.field "ChangeEnvLight" (Json.Decode.succeed elmRsConstructChangeEnvLight |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "color" (colorDecoder))))
+        , Json.Decode.field "ChangeAmbientLight" (Json.Decode.succeed elmRsConstructChangeAmbientLight |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "color" (colorDecoder))))
+        , Json.Decode.field "SetSkybox" (Json.Decode.succeed elmRsConstructSetSkybox |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "sky" (skyboxDecoder))))
+        , Json.Decode.field "SetGradient" (Json.Decode.succeed elmRsConstructSetGradient |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "color1" (colorDecoder))) |> Json.Decode.andThen (\x -> Json.Decode.map x (Json.Decode.field "color2" (colorDecoder))))
+        ]
 
 globalDecoder : Json.Decode.Decoder Global
 globalDecoder =
@@ -165,27 +169,38 @@ type Event
 
 eventDecoder : Json.Decode.Decoder Event
 eventDecoder = 
-    Json.Decode.field "type" Json.Decode.string
-        |> Json.Decode.andThen
-            (\tag ->
-                case tag of
-                    "Ready" ->
-                        Json.Decode.succeed Ready
-                    unexpected ->
-                        Json.Decode.fail <| "Unexpected variant " ++ unexpected
-            )
+    Json.Decode.oneOf
+        [ Json.Decode.string
+            |> Json.Decode.andThen
+                (\x ->
+                    case x of
+                        "Ready" ->
+                            Json.Decode.succeed Ready
+                        unexpected ->
+                            Json.Decode.fail <| "Unexpected variant " ++ unexpected
+                )
+        ]
 
 skyboxDecoder : Json.Decode.Decoder Skybox
 skyboxDecoder = 
-    Json.Decode.field "type" Json.Decode.string
-        |> Json.Decode.andThen
-            (\tag ->
-                case tag of
-                    "Gradient" ->
-                        Json.Decode.succeed Gradient
-                    "Bitmap" ->
-                        Json.Decode.succeed Bitmap
-                    unexpected ->
-                        Json.Decode.fail <| "Unexpected variant " ++ unexpected
-            )
+    Json.Decode.oneOf
+        [ Json.Decode.string
+            |> Json.Decode.andThen
+                (\x ->
+                    case x of
+                        "Gradient" ->
+                            Json.Decode.succeed Gradient
+                        unexpected ->
+                            Json.Decode.fail <| "Unexpected variant " ++ unexpected
+                )
+        , Json.Decode.string
+            |> Json.Decode.andThen
+                (\x ->
+                    case x of
+                        "Bitmap" ->
+                            Json.Decode.succeed Bitmap
+                        unexpected ->
+                            Json.Decode.fail <| "Unexpected variant " ++ unexpected
+                )
+        ]
 
